@@ -45,3 +45,31 @@ Stage Summary:
 - Confirmation dialogs for all destructive actions (delete team, delete player, delete match, abandon match, delete tournament)
 - Maiden overs now properly tracked in bowling stats
 - RETIRED_HURT wicket type now available in scoring UI
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Remove all pre-existing mock/seed data, let users enter all data themselves
+
+Work Log:
+- Replaced prisma/seed.ts — removed all mock data generation (6 teams, 66 players, tournament, matches, innings, balls)
+- New seed.ts only clears all database tables, no data insertion
+- Ran seed to clear database: verified all counts are 0 (teams, players, matches, tournaments, innings, balls)
+- Audited all components via subagent search — confirmed no hardcoded mock data exists in any component
+- Verified all pages render correctly with empty database via Agent Browser:
+  - Homepage: shows "No live matches", "No matches yet", "No active leagues", stats all 0
+  - Teams page: shows "No teams yet" with create prompt and + button
+  - Matches page: shows "No matches yet" with filter tabs
+  - Tournaments page: shows "No leagues yet" with Create League button
+  - New Match page: shows "You need at least 2 teams"
+  - New Tournament page: shows "No teams available. Create teams first."
+- Tested end-to-end team creation flow: create team → add players → verify on detail page → add inline player → check homepage stats — all PASS
+- Cleaned test data by re-running empty seed
+- Lint check passes cleanly
+
+Stage Summary:
+- Database starts completely empty — all data is user-entered
+- No mock/seed data remains in the system
+- All empty states are graceful with clear CTAs
+- Full CRUD flows work from blank slate
+- App is production-ready for real user data entry
