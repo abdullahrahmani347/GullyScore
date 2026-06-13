@@ -1,0 +1,502 @@
+     1→     1→     1→# GullyScore — Product Requirements Document
+     2→     2→     2→## Version 1.0 | June 2026 | Status: Ready for Development
+     3→     3→     3→
+     4→     4→     4→---
+     5→     5→     5→
+     6→     6→     6→## 1. EXECUTIVE SUMMARY
+     7→     7→     7→
+     8→     8→     8→GullyScore is a mobile-first progressive web application for tracking informal cricket matches — gully games, colony tournaments, university grounds, terrace cricket — at a level of fidelity that paper scorecards and WhatsApp groups cannot match.
+     9→     9→     9→
+    10→    10→    10→**Core thesis:** Every serious gully match eventually produces a score dispute. The current tools are either too casual (manually typing into a group chat) or too complex (full-blown sports management platforms). GullyScore is purpose-built for the middle — fast to start, cricket-accurate in logic, beautiful on a phone screen, and persistent across sessions.
+    11→    11→    11→
+    12→    12→    12→**Target geography:** South Asia (India, Pakistan, Sri Lanka, Bangladesh) and diaspora communities globally. The app should feel culturally native — names, examples, and aesthetic sensibility should match this context.
+    13→    13→    13→
+    14→    14→    14→---
+    15→    15→    15→
+    16→    16→    16→## 2. PROBLEM STATEMENT
+    17→    17→    17→
+    18→    18→    18→| Current Solution | Critical Failures |
+    19→    19→    19→|-----------------|-------------------|
+    20→    20→    20→| Paper scorecard | Disputes, illegible handwriting, water/weather damage, no searchable history, cannot be shared digitally |
+    21→    21→    21→| WhatsApp manual updates | Unstructured, tedious, prone to miscounts, no ball-by-ball granularity |
+    22→    22→    22→| ESPNcricinfo/Cricbuzz apps | Require registration, designed for broadcast cricket not informal games, overkill UI |
+    23→    23→    23→| Generic sports trackers | No cricket-specific scoring rules (extras, strike rotation, over completion) |
+    24→    24→    24→| Excel spreadsheets | Completely unusable on mobile, requires expertise to build |
+    25→    25→    25→
+    26→    26→    26→GullyScore eliminates all five failure modes simultaneously.
+    27→    27→    27→
+    28→    28→    28→---
+    29→    29→    29→
+    30→    30→    30→## 3. USER PERSONAS
+    31→    31→    31→
+    32→    32→    32→### Primary: The Colony Organizer (Rakesh, 28, Pune)
+    33→    33→    33→Organizes the annual apartment building tournament every winter. Manages 6-8 teams, 20-30 players, 10-15 matches over 3 weeks. Currently drowning in WhatsApp groups with disputed scorecards and a hand-drawn points table on a whiteboard.
+    34→    34→    34→**Needs:** Tournament creation, auto-generated schedule, live points table, shareable scorecards, match history.
+    35→    35→    35→**Frustration peak:** When two teams argue about yesterday's score and nobody has a clear record.
+    36→    36→    36→
+    37→    37→    37→### Secondary: The Sunday Scorer (Ahmed, 19, Lahore)
+    38→    38→    38→Scores for weekend matches between friend groups on the street or a local maidan. No tournament, just a match. Wants to start quickly, score accurately, show off the final scorecard on WhatsApp.
+    39→    39→    39→**Needs:** Fast match start, large scoring buttons usable with one thumb, share result.
+    40→    40→    40→**Frustration peak:** Losing count of extras. Forgetting which over they're on.
+    41→    41→    41→
+    42→    42→    42→### Tertiary: The Stats Nerd (Priya, 24, Chennai)
+    43→    43→    43→Plays regularly with the same friend group. Cares about career statistics across matches. Wants to know who the top scorer is across all their Sunday games this year.
+    44→    44→    44→**Needs:** Player career stats, persistent history, individual performance tracking.
+    45→    45→    45→**Frustration peak:** No record of anything except memories.
+    46→    46→    46→
+    47→    47→    47→---
+    48→    48→    48→
+    49→    49→    49→## 4. SUCCESS METRICS
+    50→    50→    50→
+    51→    51→    51→- **P0:** Time from app open to first ball recorded < 90 seconds
+    52→    52→    52→- **P0:** Scoring a ball takes < 2 taps
+    53→    53→    53→- **P0:** Zero data loss on page refresh
+    54→    54→    54→- **P1:** Scorecard sharable to WhatsApp in < 3 taps
+    55→    55→    55→- **P1:** Tournament points table auto-updates after each match
+    56→    56→    56→- **P2:** 5+ completed matches visible in history with search
+    57→    57→    57→
+    58→    58→    58→---
+    59→    59→    59→
+    60→    60→    60→## 5. FEATURE MATRIX
+    61→    61→    61→
+    62→    62→    62→### Priority 0 — MVP Core (Build First)
+    63→    63→    63→- Team CRUD with player management
+    64→    64→    64→- Match creation with toss + over config
+    65→    65→    65→- Ball-by-ball scoring engine (all run types)
+    66→    66→    66→- Extras: wide, no ball, bye, leg bye
+    67→    67→    67→- Wicket recording with dismissal types
+    68→    68→    68→- Auto-calculated runs, overs, run rate, required run rate
+    69→    69→    69→- Current batsmen + bowler display
+    70→    70→    70→- Over ball strip display (current over)
+    71→    71→    71→- Undo last ball
+    72→    72→    72→- Local persistence (survive refresh)
+    73→    73→    73→- Match history list
+    74→    74→    74→- Historical scorecard view
+    75→    75→    75→- Mobile-first responsive UI, dark mode
+    76→    76→    76→
+    77→    77→    77→### Priority 1 — Should Have (Build in Initial Release)
+    78→    78→    78→- Player-level statistics tracking (runs, wickets, economy, avg, SR)
+    79→    79→    79→- Tournament module (round robin, points table, schedule)
+    80→    80→    80→- Share scorecard as PNG image
+    81→    81→    81→- Edit any ball in current innings
+    82→    82→    82→- Over complete modal (bowler change prompt)
+    83→    83→    83→- Dashboard with live match banner, recent matches, quick stats
+    84→    84→    84→
+    85→    85→    85→### Priority 2 — Nice to Have (Post-Launch)
+    86→    86→    86→- Export match summary as copy-able text (WhatsApp format)
+    87→    87→    87→- Knockout tournament format
+    88→    88→    88→- NRR on points table
+    89→    89→    89→- PWA installable offline
+    90→    90→    90→- Match scheduling with date/time
+    91→    91→    91→- "Free Hit" indicator after no ball
+    92→    92→    92→- Dark/Light/System theme toggle
+    93→    93→    93→
+    94→    94→    94→### Out of Scope — v1
+    95→    95→    95→- Real-time multiplayer (two scorers on same match simultaneously)
+    96→    96→    96→- User authentication / cloud sync
+    97→    97→    97→- Video/photo uploads
+    98→    98→    98→- Fantasy points or betting integrations
+    99→    99→    99→- Push notifications
+   100→   100→   100→- Public shareable match links (no backend auth)
+   101→   101→   101→- Super over handling
+   102→   102→   102→- DLS calculations
+   103→   103→   103→
+   104→   104→   104→---
+   105→   105→   105→
+   106→   106→   106→## 6. DETAILED FEATURE SPECIFICATIONS
+   107→   107→   107→
+   108→   108→   108→### 6.1 Dashboard
+   109→   109→   109→
+   110→   110→   110→The home screen. Serves as the command center for everything in progress.
+   111→   111→   111→
+   112→   112→   112→**Section 1 — Live Match Banner**
+   113→   113→   113→- Condition: any match with status = LIVE
+   114→   114→   114→- Full-width card with pulsing green "LIVE" badge
+   115→   115→   115→- Displays: Team 1 score/wickets, Team 2 score/wickets (or "yet to bat"), overs, current run rate, required run rate (2nd innings only), runs needed in N overs
+   116→   116→   116→- Background: team color gradient (team batting first's color on left, team fielding's on right)
+   117→   117→   117→- Tap target: entire card → navigate to scoring screen
+   118→   118→   118→- If no live match: show "▶ Start New Match" CTA button in its place
+   119→   119→   119→
+   120→   120→   120→**Section 2 — Recent Matches (horizontal scroll)**
+   121→   121→   121→- Last 6 completed matches
+   122→   122→   122→- Each card: team names + scores, result summary ("Strikers won by 23 runs"), date, top scorer
+   123→   123→   123→- Tap → historical scorecard
+   124→   124→   124→
+   125→   125→   125→**Section 3 — Active Tournaments**
+   126→   126→   126→- Cards for each tournament with status ONGOING
+   127→   127→   127→- Shows: tournament name, current leader, matches left, date
+   128→   128→   128→- Points table mini-preview (top 3 teams)
+   129→   129→   129→- Tap → tournament detail
+   130→   130→   130→
+   131→   131→   131→**Section 4 — Quick Stats Row (top of page)**
+   132→   132→   132→- Total matches played, teams registered, active tournaments
+   133→   133→   133→- Displayed as icon + number chips
+   134→   134→   134→
+   135→   135→   135→---
+   136→   136→   136→
+   137→   137→   137→### 6.2 Team Management
+   138→   138→   138→
+   139→   139→   139→#### 6.2.1 Team List
+   140→   140→   140→- 2-column card grid on mobile, 3-column on tablet
+   141→   141→   141→- Each card: team color swatch, team emoji, name, short name, player count, win-loss record
+   142→   142→   142→- Sort toggle: Newest / Alphabetical / Most Wins
+   143→   143→   143→- Search bar (filters by team name or player name)
+   144→   144→   144→- Floating "+" button → create team
+   145→   145→   145→
+   146→   146→   146→#### 6.2.2 Create / Edit Team Form
+   147→   147→   147→
+   148→   148→   148→**Fields:**
+   149→   149→   149→| Field | Type | Validation | Notes |
+   150→   150→   150→|-------|------|------------|-------|
+   151→   151→   151→| Team Name | Text input | Required, 2-30 chars | e.g., "Colony Strikers" |
+   152→   152→   152→| Short Name | Text input | Required, 2-5 chars | Auto-suggest from initials. e.g., "CS" |
+   153→   153→   153→| Team Color | Color picker | Required | 12 preset swatches + custom hex input |
+   154→   154→   154→| Team Emoji | Emoji selector | Optional | Grid of 20 cricket-themed emojis as defaults: 🏏⚡🔥🦁🦅🐯💎🌟🚀🌙 |
+   155→   155→   155→
+   156→   156→   156→**Player Builder (inline list below form):**
+   157→   157→   157→- Each player row: name input + optional jersey # input + delete button
+   158→   158→   158→- Add player button appends a new row
+   159→   159→   159→- Minimum: 1 player (validation)
+   160→   160→   160→- Maximum: 15 players
+   161→   161→   161→- Drag handle on each row for reordering (sets batting order for match)
+   162→   162→   162→- Auto-focus on newly added player name field
+   163→   163→   163→- Validation: no two players with identical names on same team
+   164→   164→   164→
+   165→   165→   165→**Save behavior:**
+   166→   166→   166→- Optimistic update (show immediately, sync to DB in background)
+   167→   167→   167→- Toast notification on success/failure
+   168→   168→   168→- Edit form pre-populates all fields
+   169→   169→   169→
+   170→   170→   170→#### 6.2.3 Team Detail
+   171→   171→   171→
+   172→   172→   172→Header: Full-width banner in team color. Team emoji (large, 64px). Team name + short name. "Edit" button (top right).
+   173→   173→   173→
+   174→   174→   174→**Career Stats Section:**
+   175→   175→   175→- Matches played, Won, Lost, Win %
+   176→   176→   176→- Highest team total scored
+   177→   177→   177→- Lowest team total conceded
+   178→   178→   178→- Displayed as stat cards in a 2x2 grid
+   179→   179→   179→
+   180→   180→   180→**Player Roster Section:**
+   181→   181→   181→- Each player: name, jersey # (if set)
+   182→   182→   182→- Player stats (collapsed by default, expand on tap):
+   183→   183→   183→  - **Batting:** Innings, Runs, Average (runs/dismissals), SR (runs/balls×100), HS, 4s, 6s
+   184→   184→   184→  - **Bowling:** Wickets, Overs, Economy (runs/overs), Best figures (e.g., 3/14)
+   185→   185→   185→- Jersey number badge on player avatar circle
+   186→   186→   186→
+   187→   187→   187→**Delete Team:** Bottom of page, destructive red button. Confirmation dialog warns: "This team has N matches in history. Match history will be retained but team cannot be edited." If team has no match history, deletion is clean.
+   188→   188→   188→
+   189→   189→   189→---
+   190→   190→   190→
+   191→   191→   191→### 6.3 Match Creation (Multi-Step Flow)
+   192→   192→   192→
+   193→   193→   193→The match creation must be fast. Target: match started in under 60 seconds from this screen.
+   194→   194→   194→
+   195→   195→   195→#### Step 1 — Team Selection
+   196→   196→   196→- Two large dropdown/searchable selectors side-by-side
+   197→   197→   197→- Label: "Team A (batting first)" and "Team B (fielding first)"
+   198→   198→   198→- After toss step, these labels update automatically
+   199→   199→   199→- Shows team color, emoji, name, and player count in dropdown option
+   200→   200→   200→- Validation: Team A ≠ Team B
+   201→   201→   201→
+   202→   202→   202→#### Step 2 — Match Configuration
+   203→   203→   203→| Config | Options |
+   204→   204→   204→|--------|---------|
+   205→   205→   205→| Overs | Quick buttons: [2] [5] [10] [20] + [Custom] (number input, 1-50) |
+   206→   206→   206→| Venue | Text input, optional, 50 char max |
+   207→   207→   207→| Tournament | Dropdown showing active tournaments (optional) |
+   208→   208→   208→| Max Wickets | Number input, default: all players - 1. Min 1, max 10. |
+   209→   209→   209→| Date | Date picker, default: today |
+   210→   210→   210→
+   211→   211→   211→#### Step 3 — Toss
+   212→   212→   212→- Large animated coin flip (cosmetic)
+   213→   213→   213→- "Who won the toss?" → Team A / Team B buttons
+   214→   214→   214→- "They chose to..." → Bat / Field buttons
+   215→   215→   215→- Visual: shows which team bats first (in batting team's color)
+   216→   216→   216→
+   217→   217→   217→#### Step 4 — Select Playing XI (Optional but Recommended)
+   218→   218→   218→- Shows both team's squads
+   219→   219→   219→- Toggle each player in/out for this match
+   220→   220→   220→- Reorder batting order via drag handle
+   221→   221→   221→- Default: all registered players play
+   222→   222→   222→- "Skip this step" button
+   223→   223→   223→
+   224→   224→   224→**Start Match button (bottom, sticky, full-width):**
+   225→   225→   225→- Disabled until Step 1-3 are valid
+   226→   226→   226→- On tap: creates Match record, creates Innings 1 record, navigates to scoring screen
+   227→   227→   227→
+   228→   228→   228→---
+   229→   229→   229→
+   230→   230→   230→### 6.4 Ball-by-Ball Scoring Engine
+   231→   231→   231→
+   232→   232→   232→**This is the most critical screen. Optimize for speed, accuracy, and zero-friction input.**
+   233→   233→   233→
+   234→   234→   234→#### 6.4.1 Layout Specification (Mobile Portrait, 390px wide)
+   235→   235→   235→
+   236→   236→   236→```
+   237→   237→   237→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   238→   238→   238→ ← Colony Strikers vs Gali Warriors    ⋯
+   239→   239→   239→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   240→   240→   240→ [INNINGS 1 OF 2]        [Overs: 10]
+   241→   241→   241→
+   242→   242→   242→ ┌────────────────────────────────────┐
+   243→   243→   243→ │       127 / 3                      │ ← Score (72px, JetBrains Mono)
+   244→   244→   244→ │    8.4 Overs | CRR: 8.12          │
+   245→   245→   245→ │    Need: 47 in 1.2 ovs | RRR:19.7 │ ← Only in 2nd innings
+   246→   246→   246→ └────────────────────────────────────┘
+   247→   247→   247→
+   248→   248→   248→ ┌────────────────────────────────────┐
+   249→   249→   249→ │ * Ahmed R      54 (38) SR:142.1   │ ← Striker (asterisk, teal)
+   250→   250→   250→ │   Khalid M     12 (10) SR:120.0   │ ← Non-striker
+   251→   251→   251→ └────────────────────────────────────┘
+   252→   252→   252→
+   253→   253→   253→ ┌────────────────────────────────────┐
+   254→   254→   254→ │   Zain A  |  3-0-28-1  Eco:9.33  │ ← Current bowler
+   255→   255→   255→ └────────────────────────────────────┘
+   256→   256→   256→
+   257→   257→   257→ This over:  [4][1][W][0][·][ ]     ← Ball strip (6 slots)
+   258→   258→   258→
+   259→   259→   259→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   260→   260→   260→       SCORING BUTTONS (large, 2 rows)
+   261→   261→   261→  ┌────────┬────────┬────────┐
+   262→   262→   262→  │   0    │   1    │   2    │  ← 96×64px each
+   263→   263→   263→  ├────────┼────────┼────────┤
+   264→   264→   264→  │   3    │  [4]   │  [6]   │  ← 4 is teal, 6 is orange
+   265→   265→   265→  └────────┴────────┴────────┘
+   266→   266→   266→
+   267→   267→   267→  ┌──────────────┬──────────────┐
+   268→   268→   268→  │  🔴 WICKET  │  ↕ EXTRA     │  ← Full-width buttons
+   269→   269→   269→  └──────────────┴──────────────┘
+   270→   270→   270→  
+   271→   271→   271→  [↩ UNDO]  ← Small, bottom left. Disabled if no balls recorded.
+   272→   272→   272→━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   273→   273→   273→```
+   274→   274→   274→
+   275→   275→   275→#### 6.4.2 Ball Strip Display
+   276→   276→   276→
+   277→   277→   277→Shows 6 slots for current over. Each slot contains:
+   278→   278→   278→- Empty slot: hollow circle outline
+   279→   279→   279→- Dot ball (0): filled grey circle
+   280→   280→   280→- Run (1-3): circle with number
+   281→   281→   281→- Four (4): circle, teal background, "4"
+   282→   282→   282→- Six (6): circle, orange background, "6"
+   283→   283→   283→- Wicket: circle, red background, "W"
+   284→   284→   284→- Wide: small badge "Wd" (orange)
+   285→   285→   285→- No Ball: small badge "NB" (yellow)
+   286→   286→   286→- Bye: "B+n" label
+   287→   287→   287→- Leg Bye: "LB+n" label
+   288→   288→   288→
+   289→   289→   289→#### 6.4.3 Extras Panel (bottom sheet, slides up on "EXTRA" button tap)
+   290→   290→   290→
+   291→   291→   291→```
+   292→   292→   292→╔═══════════════════════════════════════╗
+   293→   293→   293→║  EXTRAS                               ║
+   294→   294→   294→║  ─────────────────────────────────── ║
+   295→   295→   295→║  [WIDE +1]  [NO BALL +1]             ║
+   296→   296→   296→║  [BYE]      [LEG BYE]               ║
+   297→   297→   297→║  ─────────────────────────────────── ║
+   298→   298→   298→║  Additional runs (if any):           ║
+   299→   299→   299→║  [ 0 ][ 1 ][ 2 ][ 3 ][ 4 ]         ║
+   300→   300→   300→║  ─────────────────────────────────── ║
+   301→   301→   301→║              [Cancel]                ║
+   302→   302→   302→╚═══════════════════════════════════════╝
+   303→   303→   303→```
+   304→   304→   304→
+   305→   305→   305→Logic for Extras panel:
+   306→   306→   306→- Select type first, then additional runs
+   307→   307→   307→- Wide: isLegalDelivery=false, 1 run auto-added, any additional runs (e.g., 4 wides = 5 total)
+   308→   308→   308→- No Ball: isLegalDelivery=false, 1 run auto-added, additional runs go to batsman
+   309→   309→   309→- Bye: isLegalDelivery=true, runs go to extras (not batsman, not bowler)
+   310→   310→   310→- Leg Bye: same as Bye but legByes counter
+   311→   311→   311→
+   312→   312→   312→#### 6.4.4 Wicket Flow
+   313→   313→   313→
+   314→   314→   314→On "WICKET" button press → Wicket Modal opens:
+   315→   315→   315→
+   316→   316→   316→**Step 1 — Dismissal Type:**
+   317→   317→   317→Grid of 6 buttons:
+   318→   318→   318→- BOWLED (ball → stumps icon)
+   319→   319→   319→- CAUGHT (hands icon)
+   320→   320→   320→- RUN OUT (running figure icon)
+   321→   321→   321→- LBW (leg icon)
+   322→   322→   322→- STUMPED (gloves icon)
+   323→   323→   323→- HIT WICKET (bat-stumps icon)
+   324→   324→   324→- RETIRED HURT (+ icon, rare)
+   325→   325→   325→
+   326→   326→   326→**Step 2 — Conditional fields based on type:**
+   327→   327→   327→- CAUGHT: "Caught by?" → dropdown of fielding team players
+   328→   328→   328→- STUMPED: "Stumped by?" → dropdown (usually wicketkeeper, but allow any)
+   329→   329→   329→- RUN OUT: "Which batsman out?" → Striker / Non-Striker selector + "Who fielded?" optional dropdown
+   330→   330→   330→- BOWLED/LBW/HIT WICKET: No additional info needed
+   331→   331→   331→
+   332→   332→   332→**Step 3 — Runs on same delivery:**
+   333→   333→   333→- Small input: "Runs scored before/during wicket ball?" (default 0)
+   334→   334→   334→- This handles: run out where runs were taken, caught where byes were run, etc.
+   335→   335→   335→
+   336→   336→   336→**Confirmation:** "Confirm Wicket" button → processes ball + opens New Batsman modal
+   337→   337→   337→
+   338→   338→   338→**New Batsman Modal:**
+   339→   339→   339→- Title: "[Dismissed Player] is out. Select new batsman:"
+   340→   340→   340→- List of available batsmen (not dismissed, not currently batting)
+   341→   341→   341→- Sorted by pre-set batting order
+   342→   342→   342→- "Did not bat" indicator for players not yet come in
+   343→   343→   343→- Last man: show "Last wicket — innings ends after this batsman"
+   344→   344→   344→- If no batsmen left: auto-complete innings
+   345→   345→   345→
+   346→   346→   346→#### 6.4.5 Scoring Logic (Canonical)
+   347→   347→   347→
+   348→   348→   348→```
+   349→   349→   349→DEFINITIONS:
+   350→   350→   350→  batsmanRuns  = runs credited to striker (0 for byes/leg-byes)
+   351→   351→   351→  extraRuns    = runs to extras column (1 for wide/NB penalty + any bye/LB runs)
+   352→   352→   352→  totalRuns    = batsmanRuns + extraRuns
+   353→   353→   353→  isLegal      = delivery counts toward the 6-ball over (NOT wide, NOT no-ball)
+   354→   354→   354→
+   355→   355→   355→BALL RECORDING SEQUENCE:
+   356→   356→   356→  1. Insert Ball record (persist immediately)
+   357→   357→   357→  2. Update BatsmanInnings (striker):
+   358→   358→   358→       balls += (isWide ? 0 : 1)
+   359→   359→   359→       runs += batsmanRuns
+   360→   360→   360→       fours += (batsmanRuns == 4 ? 1 : 0)
+   361→   361→   361→       sixes += (batsmanRuns == 6 ? 1 : 0)
+   362→   362→   362→       If isWicket AND dismissedPlayer == striker:
+   363→   363→   363→         isOut = true, set dismissalType, bowler, fielder
+   364→   364→   364→  3. If RUN_OUT of non-striker: update non-striker BatsmanInnings similarly
+   365→   365→   365→  4. Update BowlerInnings (current bowler):
+   366→   366→   366→       If isLegal: balls += 1; if balls == 6: completedOvers += 1, balls = 0
+   367→   367→   367→       runsAgainstBowler = (isBye || isLegBye) ? 0 : totalRuns
+   368→   368→   368→       runs += runsAgainstBowler
+   369→   369→   369→       If isWide: wides += 1
+   370→   370→   370→       If isNoBall: noBalls += 1
+   371→   371→   371→       If isWicket AND wicketType NOT IN [RUN_OUT, RETIRED_HURT]: wickets += 1
+   372→   372→   372→  5. Update Innings:
+   373→   373→   373→       runs += totalRuns
+   374→   374→   374→       wickets += (isWicket ? 1 : 0)
+   375→   375→   375→       If isLegal:
+   376→   376→   376→         currentBalls += 1
+   377→   377→   377→         If currentBalls == 6: completedOvers += 1, currentBalls = 0 (over complete)
+   378→   378→   378→       wideBalls += (isWide ? 1 : 0)
+   379→   379→   379→       noBalls += (isNoBall ? 1 : 0)
+   380→   380→   380→       byes += (isBye ? extraRuns : 0)
+   381→   381→   381→       legByes += (isLegBye ? extraRuns : 0)
+   382→   382→   382→  6. Strike rotation:
+   383→   383→   383→       If isLegal AND batsmanRuns % 2 == 1: swap striker/non-striker
+   384→   384→   384→       If isLegal AND currentBalls just became 0 (end of over):
+   385→   385→   385→         If batsmanRuns % 2 == 0: swap striker/non-striker
+   386→   386→   386→         (If odd: already swapped in step above, non-striker now faces next over ✓)
+   387→   387→   387→  7. Check innings completion:
+   388→   388→   388→       wickets >= maxWickets → complete
+   389→   389→   389→       completedOvers >= totalOvers AND currentBalls == 0 → complete
+   390→   390→   390→       inningsNumber == 2 AND runs >= target → complete (chasing team wins)
+   391→   391→   391→  8. Return updated state + flags: isOverComplete, needsNewBatsman, needsNewBowler, isInningsComplete
+   392→   392→   392→
+   393→   393→   393→WICKET ON NO-BALL RULE:
+   394→   394→   394→  No-ball dismissals allowed: RUN_OUT only
+   395→   395→   395→  All other dismissal types are disabled in the wicket modal when isNoBall=true
+   396→   396→   396→  Show notice: "No Ball — only Run Out possible"
+   397→   397→   397→
+   398→   398→   398→SPECIAL CASE: Wide + Wicket (Stumped or Run Out only off a wide)
+   399→   399→   399→  Implementation: Allow STUMPED and RUN_OUT off a wide. Other types disabled.
+   400→   400→   400→```
+   401→   401→   401→
+   402→   402→   402→#### 6.4.6 Undo Last Ball
+   403→   403→   403→
+   404→   404→   404→```
+   405→   405→   405→UNDO SEQUENCE:
+   406→   406→   406→  1. Fetch last Ball record for this innings (ordered by deliveryNumber DESC)
+   407→   407→   407→  2. If no balls: disable undo button
+   408→   408→   408→  3. Reverse BatsmanInnings: subtract runs, balls, fours, sixes. If isOut: restore to active.
+   409→   409→   409→  4. If non-striker was run out: restore non-striker too.
+   410→   410→   410→  5. Reverse BowlerInnings: subtract runs, balls, over adjustments, wickets.
+   411→   411→   411→  6. Reverse Innings: subtract totalRuns, wickets. Reverse over/ball counter.
+   412→   412→   412→  7. Restore striker/non-striker to the stored pre-ball strikerId/nonStrikerId in Ball record.
+   413→   413→   413→  8. If this was the first ball of a new over: undo also restores previous over state.
+   414→   414→   414→  9. If this ball prompted a new batsman selection: remove that batsman from BatsmanInnings.
+   415→   415→   415→  10. Delete Ball record.
+   416→   416→   416→  11. Re-render UI with restored state.
+   417→   417→   417→  12. Show toast: "Last ball undone"
+   418→   418→   418→```
+   419→   419→   419→
+   420→   420→   420→Note: Store strikerId and nonStrikerId BEFORE the delivery in the Ball record to make undo O(1).
+   421→   421→   421→
+   422→   422→   422→#### 6.4.7 Edit Ball
+   423→   423→   423→
+   424→   424→   424→- Access: long-press any ball in the current over strip, OR "Edit" button in full ball log
+   425→   425→   425→- Edit modal: shows ball's recorded values (runs, extras, wicket, batsman, bowler)
+   426→   426→   426→- On save: trigger `recalculate(inningsId)` — full recompute of all stats from ball log (O(n) but n is small for gully matches)
+   427→   427→   427→- Recalculate function: iterate all Ball records in order, apply scoring logic fresh, overwrite BatsmanInnings, BowlerInnings, Innings totals
+   428→   428→   428→- Show loading state during recalculation
+   429→   429→   429→
+   430→   430→   430→#### 6.4.8 Over Complete Modal
+   431→   431→   431→
+   432→   432→   432→Appears after the 6th legal ball of every over.
+   433→   433→   433→
+   434→   434→   434→```
+   435→   435→   435→╔══════════════════════════════════╗
+   436→   436→   436→║  OVER 8 COMPLETE                 ║
+   437→   437→   437→║  ────────────────────────────── ║
+   438→   438→   438→║  Zain A: 2-0-14-1               ║
+   439→   439→   439→║  This over: 1•W4•1 = 6 runs     ║
+   440→   440→   440→║                                  ║
+   441→   441→   441→║  SELECT NEXT BOWLER:             ║
+   442→   442→   442→║  ┌─────────────┬──────────────┐  ║
+   443→   443→   443→║  │ Ali B       │ 0-0-0-0      │  ║
+   444→   444→   444→║  │ Hamid K     │ 2-0-18-0     │  ║
+   445→   445→   445→║  │ [Zain A]    │ DISABLED     │  ║ ← Can't bowl consecutive overs
+   446→   446→   446→║  └─────────────┴──────────────┘  ║
+   447→   447→   447→╚══════════════════════════════════╝
+   448→   448→   448→```
+   449→   449→   449→
+   450→   450→   450→- Non-dismissable: user must select a bowler to continue
+   451→   451→   451→- If only 1 bowler available (small teams), allow same bowler (show warning)
+   452→   452→   452→
+   453→   453→   453→#### 6.4.9 Innings Break Screen
+   454→   454→   454→
+   455→   455→   455→Full screen, replaces scoring UI between innings.
+   456→   456→   456→
+   457→   457→   457→```
+   458→   458→   458→INNINGS BREAK
+   459→   459→   459→─────────────────────────────────────
+   460→   460→   460→Colony Strikers set a target of 128
+   461→   461→   461→─────────────────────────────────────
+   462→   462→   462→  1st Innings Total:  127/3 (10 ov)
+   463→   463→   463→  Top Scorer:         Ahmed R — 54(38)
+   464→   464→   464→  Best Bowling:       Zain A — 1/14(3)
+   465→   465→   465→─────────────────────────────────────
+   466→   466→   466→Gali Warriors need 128 to win
+   467→   467→   467→Required Rate: 12.80 per over
+   468→   468→   468→─────────────────────────────────────
+   469→   469→   469→[ SELECT OPENING BATSMEN ]
+   470→   470→   470→[ SELECT OPENING BOWLER  ]
+   471→   471→   471→
+   472→   472→   472→  [ ▶ START 2ND INNINGS  ]
+   473→   473→   473→─────────────────────────────────────
+   474→   474→   474→```
+   475→   475→   475→
+   476→   476→   476→#### 6.4.10 Match Result Screen
+   477→   477→   477→
+   478→   478→   478→```
+   479→   479→   479→╔══════════════════════════════════════╗
+   480→   480→   480→║   🏆  COLONY STRIKERS WIN!           ║
+   481→   481→   481→║   ──────────────────────────────── ║
+   482→   482→   482→║   Won by 23 runs                    ║
+   483→   483→   483→║                                      ║
+   484→   484→   484→║   1st: Colony Strikers 127/3 (10)   ║
+   485→   485→   485→║   2nd: Gali Warriors   104/7 (10)   ║
+   486→   486→   486→║                                      ║
+   487→   487→   487→║   ⭐ Man of the Match               ║
+   488→   488→   488→║   Ahmed R — 54(38), 142 SR          ║
+   489→   489→   489→║                                      ║
+   490→   490→   490→║   [📤 Share Scorecard]               ║
+   491→   491→   491→║   [📋 View Full Scorecard]           ║
+   492→   492→   492→║   [🏠 Back to Dashboard]             ║
+   493→   493→   493→╚══════════════════════════════════════╝
+   494→   494→   494→```
+   495→   495→   495→
+   496→   496→   496→**Result string generation logic:**
+   497→   497→   497→- Team 2 wins (chasing): "[Team] won by [10 - wickets_fallen] wickets (and [balls_remaining] balls remaining)"
+   498→   498→   498→- Team 1 wins (defending): "[Team] won by [inn1_runs - inn2_runs] runs"
+   499→   499→   499→- Tie: "Match tied — both teams scored [N]"
+   500→   500→   500→- Man of the Match: highest run scorer OR highest wicket-taker (wickets first if ≥ 3, else runs)
+
+[showing lines 1-500 of 1235; use offset=501 with limit to continue reading]

@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #00D4AA;
+  --color-accent-dim: rgba(0,212,170,0.15);
+  --color-gold: #FFD700;
+  --color-gold-dim: rgba(255,215,0,0.12);
+  --color-run-4: #4ECDC4;
+  --color-run-4-bg: rgba(78,205,196,0.12);
+  --color-run-6: #FF6B35;
+  --color-run-6-bg: rgba(255,107,53,0.12);
+  --color-wicket: #FF4444;
+  --color-wicket-bg: rgba(255,68,68,0.12);
+  --color-dot: #4A5568;
+  --color-bg-app: #070710;
+  --color-bg-card: #111120;
+  --color-bg-elevated: #1A1A2E;
+  --color-bg-input: #1E1E30;
+  --color-bg-glass: rgba(255,255,255,0.035);
+  --color-t1: #F0F0F5;
+  --color-t2: #9090A8;
+  --color-t3: #4A4A62;
+  --color-border: rgba(255,255,255,0.07);
+  --color-border-act: rgba(0,212,170,0.35);
+  --color-shadow-card: 0 4px 24px rgba(0,0,0,0.6);
+  --color-shadow-glow: 0 0 24px rgba(0,212,170,0.25);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { background: var(--color-bg-app); color: var(--color-t1); }
+body { background: var(--color-bg-app); min-height: 100dvh; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+.glass { background: var(--color-bg-glass); backdrop-filter: blur(12px); }
+.glow { box-shadow: var(--color-shadow-glow); }
+
+/* Scoring screen animations */
+@keyframes score-pulse {
+  0% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes wicket-flash {
+  0% { background-color: rgba(255,68,68,0.25); }
+  100% { background-color: transparent; }
+}
+
+@keyframes four-flash {
+  0% { background-color: rgba(78,205,196,0.2); }
+  100% { background-color: transparent; }
+}
+
+@keyframes six-flash {
+  0% { background-color: rgba(255,107,53,0.2); }
+  100% { background-color: transparent; }
+}
+
+.score-pulse { animation: score-pulse 0.3s ease-out; }
+.wicket-flash { animation: wicket-flash 0.8s ease-out; }
+.four-flash { animation: four-flash 0.6s ease-out; }
+.six-flash { animation: six-flash 0.6s ease-out; }
+
+/* Scoring screen - prevent overscroll */
+.scoring-screen {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Dialog/Sheet overrides for dark theme */
+[data-slot="dialog-content"] {
+  background: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-t1) !important;
+}
+
+[data-slot="sheet-content"] {
+  background: var(--color-bg-card) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-t1) !important;
+}
+
+[data-slot="dialog-overlay"] {
+  background: rgba(0,0,0,0.6) !important;
+}
+
+[data-slot="sheet-overlay"] {
+  background: rgba(0,0,0,0.6) !important;
+}

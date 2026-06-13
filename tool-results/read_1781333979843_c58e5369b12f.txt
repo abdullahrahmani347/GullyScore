@@ -1,0 +1,1500 @@
+     1→     1→Build GullyScore — a production-ready, mobile-first cricket scoring web app. You are building the ENTIRE application: backend API, database layer, frontend UI, state management, sample data seeding, and all edge cases. Do not scaffold placeholders. Every feature listed must be fully implemented and functional.
+     2→     2→
+     3→     3→
+     4→     4→TECH STACK (Exact Versions)
+     5→     5→
+     6→     6→json{
+     7→     7→  "framework": "Next.js 14.2 (App Router, TypeScript strict)",
+     8→     8→  "styling": "Tailwind CSS 3.4",
+     9→     9→  "ui": "shadcn/ui (init with --style=default --base-color=zinc)",
+    10→    10→  "animation": "Framer Motion 11",
+    11→    11→  "state": "Zustand 4.5",
+    12→    12→  "database": "Prisma 5.14 + SQLite",
+    13→    13→  "fonts": "next/font (Inter + JetBrains Mono)",
+    14→    14→  "icons": "lucide-react",
+    15→    15→  "dates": "date-fns 3",
+    16→    16→  "image-export": "html2canvas 1.4.1",
+    17→    17→  "data-fetching": "SWR 2.2",
+    18→    18→  "package-manager": "pnpm"
+    19→    19→}
+    20→    20→
+    21→    21→
+    22→    22→STEP 0 — INITIALIZATION
+    23→    23→
+    24→    24→bashpnpm create next-app gullyscore --typescript --tailwind --eslint --app --src-dir=false
+    25→    25→cd gullyscore
+    26→    26→pnpm add @prisma/client prisma zustand framer-motion swr date-fns html2canvas lucide-react
+    27→    27→pnpm add @radix-ui/react-dialog @radix-ui/react-select @radix-ui/react-tabs @radix-ui/react-toast @radix-ui/react-dropdown-menu @radix-ui/react-sheet
+    28→    28→pnpm add class-variance-authority clsx tailwind-merge
+    29→    29→pnpm add -D prisma ts-node @types/node
+    30→    30→npx prisma init --datasource-provider sqlite
+    31→    31→npx shadcn@latest init
+    32→    32→npx shadcn@latest add button card dialog select tabs badge sheet skeleton toast input label separator dropdown-menu
+    33→    33→
+    34→    34→Environment:
+    35→    35→
+    36→    36→envDATABASE_URL="file:./gullyscore.db"
+    37→    37→
+    38→    38→package.json scripts to add:
+    39→    39→
+    40→    40→json{
+    41→    41→  "db:push": "prisma db push",
+    42→    42→  "db:seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    43→    43→  "db:studio": "prisma studio"
+    44→    44→}
+    45→    45→
+    46→    46→
+    47→    47→STEP 1 — FILE STRUCTURE
+    48→    48→
+    49→    49→Create this exact structure. Empty files are fine; fill them in order:
+    50→    50→
+    51→    51→gullyscore/
+    52→    52→├── app/
+    53→    53→│   ├── layout.tsx
+    54→    54→│   ├── page.tsx                          # Dashboard
+    55→    55→│   ├── globals.css
+    56→    56→│   ├── teams/
+    57→    57→│   │   ├── page.tsx                      # Team list
+    58→    58→│   │   └── [id]/page.tsx                 # Team detail + edit inline
+    59→    59→│   ├── matches/
+    60→    60→│   │   ├── page.tsx                      # Match history
+    61→    61→│   │   ├── new/page.tsx                  # Create match (multi-step)
+    62→    62→│   │   └── [id]/
+    63→    63→│   │       ├── page.tsx                  # Live scoring screen
+    64→    64→│   │       └── scorecard/page.tsx        # Historical scorecard
+    65→    65→│   ├── tournaments/
+    66→    66→│   │   ├── page.tsx                      # Tournament list
+    67→    67→│   │   ├── new/page.tsx                  # Create tournament
+    68→    68→│   │   └── [id]/page.tsx                 # Tournament detail
+    69→    69→│   └── api/
+    70→    70→│       ├── teams/
+    71→    71→│       │   ├── route.ts                  # GET list, POST create
+    72→    72→│       │   └── [id]/
+    73→    73→│       │       ├── route.ts              # GET, PUT, DELETE
+    74→    74→│       │       └── players/
+    75→    75→│       │           ├── route.ts          # POST add player
+    76→    76→│       │           └── [pid]/route.ts    # PUT, DELETE player
+    77→    77→│       ├── matches/
+    78→    78→│       │   ├── route.ts                  # GET list, POST create
+    79→    79→│       │   └── [id]/
+    80→    80→│       │       ├── route.ts              # GET, PATCH
+    81→    81→│       │       ├── scorecard/route.ts    # GET full scorecard
+    82→    82→│       │       ├── complete/route.ts     # POST complete match
+    83→    83→│       │       └── innings/[iid]/
+    84→    84→│       │           ├── balls/
+    85→    85→│       │           │   ├── route.ts      # POST record ball
+    86→    86→│       │           │   └── last/route.ts # DELETE undo
+    87→    87→│       │           ├── complete/route.ts # POST complete innings
+    88→    88→│       │           ├── striker/route.ts  # POST set striker/non-striker
+    89→    89→│       │           └── bowler/route.ts   # POST set current bowler
+    90→    90→│       └── tournaments/
+    91→    91→│           ├── route.ts
+    92→    92→│           └── [id]/
+    93→    93→│               ├── route.ts
+    94→    94→│               ├── points-table/route.ts
+    95→    95→│               └── schedule/route.ts
+    96→    96→├── components/
+    97→    97→│   ├── layout/
+    98→    98→│   │   ├── BottomNav.tsx
+    99→    99→│   │   ├── AppHeader.tsx
+   100→   100→│   │   └── PageWrapper.tsx
+   101→   101→│   ├── dashboard/
+   102→   102→│   │   ├── LiveMatchBanner.tsx
+   103→   103→│   │   ├── RecentMatchCard.tsx
+   104→   104→│   │   └── QuickStats.tsx
+   105→   105→│   ├── scoring/
+   106→   106→│   │   ├── ScoringScreen.tsx             # Main orchestrator (state machine)
+   107→   107→│   │   ├── ScoreDisplay.tsx              # Hero score + overs + rates
+   108→   108→│   │   ├── ScoreButtons.tsx              # 0,1,2,3,4,6 grid
+   109→   109→│   │   ├── OverStrip.tsx                 # Current over balls
+   110→   110→│   │   ├── BatsmenCard.tsx               # Striker + non-striker
+   111→   111→│   │   ├── BowlerCard.tsx                # Current bowler
+   112→   112→│   │   ├── ExtrasPanel.tsx               # Bottom sheet extras
+   113→   113→│   │   ├── WicketModal.tsx               # Dismissal type + fielder
+   114→   114→│   │   ├── PlayerSelectModal.tsx         # Batsman / bowler selection
+   115→   115→│   │   ├── OverCompleteModal.tsx         # Over summary + bowler change
+   116→   116→│   │   ├── InningsBreakScreen.tsx
+   117→   117→│   │   └── MatchResultScreen.tsx
+   118→   118→│   ├── scorecard/
+   119→   119→│   │   ├── ScorecardView.tsx             # Wraps both innings, export-ready
+   120→   120→│   │   ├── BattingTable.tsx
+   121→   121→│   │   ├── BowlingTable.tsx
+   122→   122→│   │   ├── FallOfWickets.tsx
+   123→   123→│   │   └── BallByBallLog.tsx
+   124→   124→│   ├── teams/
+   125→   125→│   │   ├── TeamCard.tsx
+   126→   126→│   │   ├── TeamForm.tsx                  # Create + edit (reused)
+   127→   127→│   │   └── PlayerForm.tsx               # Inline player list builder
+   128→   128→│   ├── tournaments/
+   129→   129→│   │   ├── TournamentCard.tsx
+   130→   130→│   │   ├── PointsTable.tsx
+   131→   131→│   │   └── ScheduleList.tsx
+   132→   132→│   └── ui/                              # shadcn/ui auto-generated
+   133→   133→├── lib/
+   134→   134→│   ├── prisma.ts                        # Singleton Prisma client
+   135→   135→│   ├── scoring-engine.ts               # Core ball recording logic
+   136→   136→│   ├── scoring-utils.ts                # CRR, RRR, result strings, NRR
+   137→   137→│   ├── recalculate.ts                  # Full innings recalc from ball log
+   138→   138→│   ├── share.ts                        # html2canvas + Web Share API
+   139→   139→│   └── cn.ts                           # clsx + tailwind-merge util
+   140→   140→├── store/
+   141→   141→│   ├── matchStore.ts                   # Zustand: live scoring state
+   142→   142→│   └── settingsStore.ts                # Zustand: app settings (persisted)
+   143→   143→├── types/
+   144→   144→│   └── index.ts                        # All shared TypeScript types
+   145→   145→├── prisma/
+   146→   146→│   ├── schema.prisma                   # (as defined in PRD §7.1)
+   147→   147→│   └── seed.ts                         # Realistic sample data
+   148→   148→├── public/
+   149→   149→│   ├── manifest.json                   # PWA manifest
+   150→   150→│   └── icons/                          # PWA icons (192, 512)
+   151→   151→├── tailwind.config.ts
+   152→   152→├── next.config.js
+   153→   153→└── tsconfig.json
+   154→   154→
+   155→   155→
+   156→   156→STEP 2 — globals.css (Design Tokens)
+   157→   157→
+   158→   158→css/* app/globals.css */
+   159→   159→@tailwind base;
+   160→   160→@tailwind components;
+   161→   161→@tailwind utilities;
+   162→   162→
+   163→   163→@layer base {
+   164→   164→  :root {
+   165→   165→    --bg-app:       #070710;
+   166→   166→    --bg-card:      #111120;
+   167→   167→    --bg-elevated:  #1A1A2E;
+   168→   168→    --bg-input:     #1E1E30;
+   169→   169→    --bg-glass:     rgba(255,255,255,0.035);
+   170→   170→    --accent:       #00D4AA;
+   171→   171→    --accent-dim:   rgba(0,212,170,0.15);
+   172→   172→    --gold:         #FFD700;
+   173→   173→    --gold-dim:     rgba(255,215,0,0.12);
+   174→   174→    --run-4:        #4ECDC4;
+   175→   175→    --run-4-bg:     rgba(78,205,196,0.12);
+   176→   176→    --run-6:        #FF6B35;
+   177→   177→    --run-6-bg:     rgba(255,107,53,0.12);
+   178→   178→    --wicket:       #FF4444;
+   179→   179→    --wicket-bg:    rgba(255,68,68,0.12);
+   180→   180→    --dot:          #4A5568;
+   181→   181→    --text-1:       #F0F0F5;
+   182→   182→    --text-2:       #9090A8;
+   183→   183→    --text-3:       #4A4A62;
+   184→   184→    --border:       rgba(255,255,255,0.07);
+   185→   185→    --border-act:   rgba(0,212,170,0.35);
+   186→   186→    --shadow-card:  0 4px 24px rgba(0,0,0,0.6);
+   187→   187→    --shadow-glow:  0 0 24px rgba(0,212,170,0.25);
+   188→   188→    --r-sm: 8px; --r-md: 16px; --r-lg: 24px; --r-xl: 32px;
+   189→   189→  }
+   190→   190→
+   191→   191→  [data-theme="light"] {
+   192→   192→    --bg-app:      #F2F4F8;
+   193→   193→    --bg-card:     #FFFFFF;
+   194→   194→    --bg-elevated: #FFFFFF;
+   195→   195→    --bg-input:    #F0F2F6;
+   196→   196→    --text-1:      #0A0A1A;
+   197→   197→    --text-2:      #4A5568;
+   198→   198→    --text-3:      #9CA3AF;
+   199→   199→    --border:      rgba(0,0,0,0.08);
+   200→   200→  }
+   201→   201→
+   202→   202→  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+   203→   203→  html { background: var(--bg-app); color: var(--text-1); }
+   204→   204→  body { background: var(--bg-app); min-height: 100dvh; font-family: var(--font-inter); }
+   205→   205→
+   206→   206→  .font-mono { font-family: var(--font-mono); }
+   207→   207→
+   208→   208→  /* Scrollbar */
+   209→   209→  ::-webkit-scrollbar { width: 4px; }
+   210→   210→  ::-webkit-scrollbar-track { background: transparent; }
+   211→   211→  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+   212→   212→}
+   213→   213→
+   214→   214→@layer utilities {
+   215→   215→  .glass { background: var(--bg-glass); backdrop-filter: blur(12px); }
+   216→   216→  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md); }
+   217→   217→  .card-elevated { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--r-lg); }
+   218→   218→  .glow { box-shadow: var(--shadow-glow); }
+   219→   219→  .text-accent { color: var(--accent); }
+   220→   220→  .text-muted-3 { color: var(--text-3); }
+   221→   221→  .bg-card { background: var(--bg-card); }
+   222→   222→  .bg-app { background: var(--bg-app); }
+   223→   223→  .border-default { border-color: var(--border); }
+   224→   224→}
+   225→   225→
+   226→   226→
+   227→   227→STEP 3 — TypeScript Types (types/index.ts)
+   228→   228→
+   229→   229→Define ALL shared types here. Every API route and component imports from this file.
+   230→   230→
+   231→   231→typescript// types/index.ts
+   232→   232→
+   233→   233→export type WicketType = 'BOWLED' | 'CAUGHT' | 'RUN_OUT' | 'LBW' | 'STUMPED' | 'HIT_WICKET' | 'RETIRED_HURT';
+   234→   234→export type ExtraType = 'WIDE' | 'NO_BALL' | 'BYE' | 'LEG_BYE';
+   235→   235→export type MatchStatus = 'UPCOMING' | 'TOSS' | 'LIVE' | 'INNINGS_BREAK' | 'COMPLETED' | 'ABANDONED';
+   236→   236→export type TossDecision = 'BAT' | 'FIELD';
+   237→   237→export type TournamentFormat = 'ROUND_ROBIN' | 'KNOCKOUT';
+   238→   238→export type TournamentStatus = 'UPCOMING' | 'ONGOING' | 'COMPLETED';
+   239→   239→
+   240→   240→// Scoring screen state machine
+   241→   241→export type ScoringState =
+   242→   242→  | 'SETUP_OPENER_1'
+   243→   243→  | 'SETUP_OPENER_2'
+   244→   244→  | 'SETUP_OPENING_BOWLER'
+   245→   245→  | 'SCORING'
+   246→   246→  | 'PROCESSING'
+   247→   247→  | 'WICKET_MODAL'
+   248→   248→  | 'NEW_BATSMAN'
+   249→   249→  | 'OVER_COMPLETE'
+   250→   250→  | 'INNINGS_BREAK'
+   251→   251→  | 'MATCH_RESULT';
+   252→   252→
+   253→   253→export interface Player {
+   254→   254→  id: string;
+   255→   255→  name: string;
+   256→   256→  teamId: string;
+   257→   257→  jerseyNumber?: number | null;
+   258→   258→}
+   259→   259→
+   260→   260→export interface Team {
+   261→   261→  id: string;
+   262→   262→  name: string;
+   263→   263→  shortName: string;
+   264→   264→  color: string;
+   265→   265→  emoji: string;
+   266→   266→  players: Player[];
+   267→   267→  createdAt: string;
+   268→   268→}
+   269→   269→
+   270→   270→export interface BatsmanInningsData {
+   271→   271→  id: string;
+   272→   272→  playerId: string;
+   273→   273→  player: Player;
+   274→   274→  runs: number;
+   275→   275→  balls: number;
+   276→   276→  fours: number;
+   277→   277→  sixes: number;
+   278→   278→  isOut: boolean;
+   279→   279→  dismissalType?: WicketType | null;
+   280→   280→  dismissedByBowlerId?: string | null;
+   281→   281→  fielderPlayerId?: string | null;
+   282→   282→  battingOrder: number;
+   283→   283→}
+   284→   284→
+   285→   285→export interface BowlerInningsData {
+   286→   286→  id: string;
+   287→   287→  playerId: string;
+   288→   288→  player: Player;
+   289→   289→  completedOvers: number;
+   290→   290→  balls: number;
+   291→   291→  runs: number;
+   292→   292→  wickets: number;
+   293→   293→  wides: number;
+   294→   294→  noBalls: number;
+   295→   295→}
+   296→   296→
+   297→   297→export interface InningsState {
+   298→   298→  id: string;
+   299→   299→  matchId: string;
+   300→   300→  teamId: string;
+   301→   301→  team: Team;
+   302→   302→  inningsNumber: number;
+   303→   303→  runs: number;
+   304→   304→  wickets: number;
+   305→   305→  completedOvers: number;
+   306→   306→  currentBalls: number;
+   307→   307→  wideBalls: number;
+   308→   308→  noBalls: number;
+   309→   309→  byes: number;
+   310→   310→  legByes: number;
+   311→   311→  target?: number | null;
+   312→   312→  strikerId?: string | null;
+   313→   313→  nonStrikerId?: string | null;
+   314→   314→  currentBowlerId?: string | null;
+   315→   315→  isCompleted: boolean;
+   316→   316→  batting: BatsmanInningsData[];
+   317→   317→  bowling: BowlerInningsData[];
+   318→   318→  balls: BallRecord[];
+   319→   319→}
+   320→   320→
+   321→   321→export interface BallRecord {
+   322→   322→  id: string;
+   323→   323→  overNumber: number;
+   324→   324→  ballInOver: number;
+   325→   325→  deliveryNumber: number;
+   326→   326→  batsmanId: string;
+   327→   327→  bowlerId: string;
+   328→   328→  runs: number;
+   329→   329→  isWicket: boolean;
+   330→   330→  wicketType?: WicketType | null;
+   331→   331→  dismissedPlayerId?: string | null;
+   332→   332→  fielderPlayerId?: string | null;
+   333→   333→  extraType?: ExtraType | null;
+   334→   334→  extraRuns: number;
+   335→   335→  isLegalDelivery: boolean;
+   336→   336→}
+   337→   337→
+   338→   338→export interface MatchData {
+   339→   339→  id: string;
+   340→   340→  team1: Team;
+   341→   341→  team2: Team;
+   342→   342→  totalOvers: number;
+   343→   343→  maxWickets: number;
+   344→   344→  status: MatchStatus;
+   345→   345→  tossWinnerId?: string | null;
+   346→   346→  tossDecision?: TossDecision | null;
+   347→   347→  currentInnings: number;
+   348→   348→  result?: string | null;
+   349→   349→  winnerId?: string | null;
+   350→   350→  venue?: string | null;
+   351→   351→  tournamentId?: string | null;
+   352→   352→  createdAt: string;
+   353→   353→  completedAt?: string | null;
+   354→   354→  innings: InningsState[];
+   355→   355→}
+   356→   356→
+   357→   357→export interface RecordBallInput {
+   358→   358→  batsmanId: string;
+   359→   359→  bowlerId: string;
+   360→   360→  runs: number;
+   361→   361→  isWicket: boolean;
+   362→   362→  wicketType?: WicketType | null;
+   363→   363→  dismissedPlayerId?: string | null;
+   364→   364→  fielderPlayerId?: string | null;
+   365→   365→  extraType?: ExtraType | null;
+   366→   366→  extraRuns: number;
+   367→   367→}
+   368→   368→
+   369→   369→export interface RecordBallResponse {
+   370→   370→  ball: BallRecord;
+   371→   371→  inningsState: {
+   372→   372→    runs: number;
+   373→   373→    wickets: number;
+   374→   374→    completedOvers: number;
+   375→   375→    currentBalls: number;
+   376→   376→    currentRunRate: number;
+   377→   377→    requiredRunRate: number | null;
+   378→   378→    runsNeeded: number | null;
+   379→   379→    ballsRemaining: number | null;
+   380→   380→    isCompleted: boolean;
+   381→   381→    isOverComplete: boolean;
+   382→   382→  };
+   383→   383→  strikerUpdate: { strikerId: string; nonStrikerId: string; };
+   384→   384→  needsNewBatsman: boolean;
+   385→   385→  needsNewBowler: boolean;
+   386→   386→  needsInningsBreak: boolean;
+   387→   387→  isMatchComplete: boolean;
+   388→   388→}
+   389→   389→
+   390→   390→export interface TournamentTeamStat {
+   391→   391→  teamId: string;
+   392→   392→  team: Team;
+   393→   393→  played: number;
+   394→   394→  won: number;
+   395→   395→  lost: number;
+   396→   396→  tied: number;
+   397→   397→  points: number;
+   398→   398→  nrr: number;
+   399→   399→  runsScored: number;
+   400→   400→  runsConceded: number;
+   401→   401→}
+   402→   402→
+   403→   403→export interface Tournament {
+   404→   404→  id: string;
+   405→   405→  name: string;
+   406→   406→  format: TournamentFormat;
+   407→   407→  totalOvers: number;
+   408→   408→  status: TournamentStatus;
+   409→   409→  createdAt: string;
+   410→   410→  teams: TournamentTeamStat[];
+   411→   411→  matches: MatchData[];
+   412→   412→}
+   413→   413→
+   414→   414→// Zustand store types
+   415→   415→export interface MatchStoreState {
+   416→   416→  currentState: ScoringState;
+   417→   417→  match: MatchData | null;
+   418→   418→  currentInnings: InningsState | null;
+   419→   419→  strikerId: string | null;
+   420→   420→  nonStrikerId: string | null;
+   421→   421→  currentBowlerId: string | null;
+   422→   422→  lastBallResult: RecordBallResponse | null;
+   423→   423→  isSubmitting: boolean;
+   424→   424→  
+   425→   425→  setMatch: (match: MatchData) => void;
+   426→   426→  setCurrentInnings: (innings: InningsState) => void;
+   427→   427→  setStrike: (strikerId: string, nonStrikerId: string) => void;
+   428→   428→  setBowler: (bowlerId: string) => void;
+   429→   429→  setState: (state: ScoringState) => void;
+   430→   430→  setSubmitting: (v: boolean) => void;
+   431→   431→  setLastBallResult: (result: RecordBallResponse) => void;
+   432→   432→  reset: () => void;
+   433→   433→}
+   434→   434→
+   435→   435→
+   436→   436→STEP 4 — Prisma Schema
+   437→   437→
+   438→   438→Paste exactly the schema from PRD §7.1 into prisma/schema.prisma. Then run:
+   439→   439→
+   440→   440→bashnpx prisma db push
+   441→   441→
+   442→   442→
+   443→   443→STEP 5 — Core Library: Scoring Engine (lib/scoring-engine.ts)
+   444→   444→
+   445→   445→This is the critical logic file. Implement it completely:
+   446→   446→
+   447→   447→typescript// lib/scoring-engine.ts
+   448→   448→import { PrismaClient } from '@prisma/client';
+   449→   449→import type { RecordBallInput, RecordBallResponse } from '@/types';
+   450→   450→import { calculateCRR, calculateRRR, decimalOvers } from './scoring-utils';
+   451→   451→
+   452→   452→export async function recordBall(
+   453→   453→  prisma: PrismaClient,
+   454→   454→  inningsId: string,
+   455→   455→  input: RecordBallInput
+   456→   456→): Promise<RecordBallResponse> {
+   457→   457→  const innings = await prisma.innings.findUniqueOrThrow({
+   458→   458→    where: { id: inningsId },
+   459→   459→    include: {
+   460→   460→      match: true,
+   461→   461→      batting: true,
+   462→   462→      bowling: true,
+   463→   463→      balls: { orderBy: { deliveryNumber: 'desc' }, take: 1 },
+   464→   464→    },
+   465→   465→  });
+   466→   466→
+   467→   467→  const {
+   468→   468→    batsmanId, bowlerId, runs, isWicket, wicketType,
+   469→   469→    dismissedPlayerId, fielderPlayerId, extraType, extraRuns,
+   470→   470→  } = input;
+   471→   471→
+   472→   472→  const isWide = extraType === 'WIDE';
+   473→   473→  const isNoBall = extraType === 'NO_BALL';
+   474→   474→  const isBye = extraType === 'BYE';
+   475→   475→  const isLegBye = extraType === 'LEG_BYE';
+   476→   476→  const isLegalDelivery = !isWide && !isNoBall;
+   477→   477→  const totalRuns = runs + extraRuns;
+   478→   478→
+   479→   479→  // runs credited to bowler (byes/legbyes are NOT bowler's fault)
+   480→   480→  const runsAgainstBowler = (isBye || isLegBye) ? 0 : totalRuns;
+   481→   481→
+   482→   482→  const currentLegalBalls = innings.currentBalls;
+   483→   483→  const newBallInOver = isLegalDelivery ? currentLegalBalls + 1 : 0;
+   484→   484→  const isOverComplete = isLegalDelivery && newBallInOver === 6;
+   485→   485→
+   486→   486→  const lastDelivery = innings.balls[0];
+   487→   487→  const nextDeliveryNumber = (lastDelivery?.deliveryNumber ?? 0) + 1;
+   488→   488→
+   489→   489→  // ── 1. Create Ball record ─────────────────────────────────
+   490→   490→  const ball = await prisma.ball.create({
+   491→   491→    data: {
+   492→   492→      inningsId,
+   493→   493→      overNumber: innings.completedOvers,
+   494→   494→      ballInOver: isLegalDelivery ? newBallInOver : 0,
+   495→   495→      deliveryNumber: nextDeliveryNumber,
+   496→   496→      batsmanId,
+   497→   497→      bowlerId,
+   498→   498→      runs,
+   499→   499→      isWicket,
+   500→   500→      wicketType: isWicket ? wicketType : null,
+   501→   501→      dismissedPlayerId: isWicket ? dismissedPlayerId : null,
+   502→   502→      fielderPlayerId: (isWicket && fielderPlayerId) ? fielderPlayerId : null,
+   503→   503→      extraType: extraType ?? null,
+   504→   504→      extraRuns,
+   505→   505→      isLegalDelivery,
+   506→   506→      strikerIdBefore: innings.strikerId!,
+   507→   507→      nonStrikerIdBefore: innings.nonStrikerId!,
+   508→   508→    },
+   509→   509→  });
+   510→   510→
+   511→   511→  // ── 2. Update BatsmanInnings (striker) ───────────────────
+   512→   512→  const batsmanDismissed = isWicket && (
+   513→   513→    wicketType !== 'RUN_OUT'
+   514→   514→      ? true
+   515→   515→      : dismissedPlayerId === batsmanId
+   516→   516→  );
+   517→   517→
+   518→   518→  await prisma.batsmanInnings.upsert({
+   519→   519→    where: { inningsId_playerId: { inningsId, playerId: batsmanId } },
+   520→   520→    create: {
+   521→   521→      inningsId, playerId: batsmanId, battingOrder: 99,
+   522→   522→      runs: runs,
+   523→   523→      balls: isWide ? 0 : 1,
+   524→   524→      fours: runs === 4 && !isBye && !isLegBye ? 1 : 0,
+   525→   525→      sixes: runs === 6 && !isBye && !isLegBye ? 1 : 0,
+   526→   526→      isOut: batsmanDismissed,
+   527→   527→      dismissalType: batsmanDismissed ? wicketType : null,
+   528→   528→      dismissedByBowlerId: batsmanDismissed && !['RUN_OUT','RETIRED_HURT'].includes(wicketType!) ? bowlerId : null,
+   529→   529→      fielderPlayerId: batsmanDismissed && fielderPlayerId ? fielderPlayerId : null,
+   530→   530→    },
+   531→   531→    update: {
+   532→   532→      runs: { increment: runs },
+   533→   533→      balls: { increment: isWide ? 0 : 1 },
+   534→   534→      fours: { increment: runs === 4 && !isBye && !isLegBye ? 1 : 0 },
+   535→   535→      sixes: { increment: runs === 6 && !isBye && !isLegBye ? 1 : 0 },
+   536→   536→      ...(batsmanDismissed ? {
+   537→   537→        isOut: true,
+   538→   538→        dismissalType: wicketType,
+   539→   539→        dismissedByBowlerId: !['RUN_OUT','RETIRED_HURT'].includes(wicketType!) ? bowlerId : null,
+   540→   540→        fielderPlayerId: fielderPlayerId ?? null,
+   541→   541→      } : {}),
+   542→   542→    },
+   543→   543→  });
+   544→   544→
+   545→   545→  // Handle run-out of non-striker
+   546→   546→  if (isWicket && wicketType === 'RUN_OUT' && dismissedPlayerId === innings.nonStrikerId) {
+   547→   547→    await prisma.batsmanInnings.upsert({
+   548→   548→      where: { inningsId_playerId: { inningsId, playerId: innings.nonStrikerId! } },
+   549→   549→      create: {
+   550→   550→        inningsId, playerId: innings.nonStrikerId!, battingOrder: 99,
+   551→   551→        isOut: true, dismissalType: 'RUN_OUT',
+   552→   552→      },
+   553→   553→      update: { isOut: true, dismissalType: 'RUN_OUT' },
+   554→   554→    });
+   555→   555→  }
+   556→   556→
+   557→   557→  // ── 3. Update BowlerInnings ───────────────────────────────
+   558→   558→  const currentBowler = innings.bowling.find(b => b.playerId === bowlerId);
+   559→   559→  const bowlerCurrentBalls = currentBowler?.balls ?? 0;
+   560→   560→  const bowlerNewBalls = isLegalDelivery ? (bowlerCurrentBalls + 1) % 6 : bowlerCurrentBalls;
+   561→   561→  const bowlerOverComplete = isLegalDelivery && (bowlerCurrentBalls + 1) === 6;
+   562→   562→
+   563→   563→  await prisma.bowlerInnings.upsert({
+   564→   564→    where: { inningsId_playerId: { inningsId, playerId: bowlerId } },
+   565→   565→    create: {
+   566→   566→      inningsId, playerId: bowlerId,
+   567→   567→      completedOvers: bowlerOverComplete ? 1 : 0,
+   568→   568→      balls: bowlerNewBalls,
+   569→   569→      runs: runsAgainstBowler,
+   570→   570→      wickets: isWicket && !['RUN_OUT','RETIRED_HURT'].includes(wicketType!) ? 1 : 0,
+   571→   571→      wides: isWide ? 1 : 0,
+   572→   572→      noBalls: isNoBall ? 1 : 0,
+   573→   573→    },
+   574→   574→    update: {
+   575→   575→      balls: bowlerNewBalls,
+   576→   576→      runs: { increment: runsAgainstBowler },
+   577→   577→      ...(bowlerOverComplete ? { completedOvers: { increment: 1 } } : {}),
+   578→   578→      ...(isWicket && !['RUN_OUT','RETIRED_HURT'].includes(wicketType!) ? { wickets: { increment: 1 } } : {}),
+   579→   579→      ...(isWide ? { wides: { increment: 1 } } : {}),
+   580→   580→      ...(isNoBall ? { noBalls: { increment: 1 } } : {}),
+   581→   581→    },
+   582→   582→  });
+   583→   583→
+   584→   584→  // ── 4. Update Innings state ───────────────────────────────
+   585→   585→  const newCurrentBalls = isOverComplete ? 0 : (isLegalDelivery ? currentLegalBalls + 1 : currentLegalBalls);
+   586→   586→  const newCompletedOvers = innings.completedOvers + (isOverComplete ? 1 : 0);
+   587→   587→  const newWickets = innings.wickets + (isWicket ? 1 : 0);
+   588→   588→  const newRuns = innings.runs + totalRuns;
+   589→   589→
+   590→   590→  // ── 5. Calculate new striker ─────────────────────────────
+   591→   591→  let newStrikerId = innings.strikerId!;
+   592→   592→  let newNonStrikerId = innings.nonStrikerId!;
+   593→   593→
+   594→   594→  if (isLegalDelivery) {
+   595→   595→    if (runs % 2 === 1) {
+   596→   596→      [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
+   597→   597→    }
+   598→   598→    if (isOverComplete) {
+   599→   599→      // At end of over: if even runs, must also rotate (non-striker faces next over)
+   600→   600→      if (runs % 2 === 0) {
+   601→   601→        [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
+   602→   602→      }
+   603→   603→    }
+   604→   604→  }
+   605→   605→
+   606→   606→  // If striker dismissed, non-striker takes strike position while new batsman awaits
+   607→   607→  if (batsmanDismissed) {
+   608→   608→    newStrikerId = newNonStrikerId;
+   609→   609→    newNonStrikerId = ''; // will be filled by new batsman selection
+   610→   610→  }
+   611→   611→
+   612→   612→  // ── 6. Persist innings state ──────────────────────────────
+   613→   613→  await prisma.innings.update({
+   614→   614→    where: { id: inningsId },
+   615→   615→    data: {
+   616→   616→      runs: newRuns,
+   617→   617→      wickets: newWickets,
+   618→   618→      completedOvers: newCompletedOvers,
+   619→   619→      currentBalls: newCurrentBalls,
+   620→   620→      wideBalls: { increment: isWide ? 1 : 0 },
+   621→   621→      noBalls: { increment: isNoBall ? 1 : 0 },
+   622→   622→      byes: { increment: isBye ? extraRuns : 0 },
+   623→   623→      legByes: { increment: isLegBye ? extraRuns : 0 },
+   624→   624→      strikerId: newStrikerId || null,
+   625→   625→      nonStrikerId: newNonStrikerId || null,
+   626→   626→    },
+   627→   627→  });
+   628→   628→
+   629→   629→  // ── 7. Check completion ────────────────────────────────────
+   630→   630→  const match = innings.match;
+   631→   631→  const isInningsComplete =
+   632→   632→    newWickets >= match.maxWickets ||
+   633→   633→    (newCompletedOvers >= match.totalOvers && newCurrentBalls === 0) ||
+   634→   634→    (innings.inningsNumber === 2 && innings.target != null && newRuns >= innings.target);
+   635→   635→
+   636→   636→  const ballsRemaining = innings.inningsNumber === 2 && innings.target != null
+   637→   637→    ? (match.totalOvers * 6) - (newCompletedOvers * 6 + newCurrentBalls)
+   638→   638→    : null;
+   639→   639→
+   640→   640→  return {
+   641→   641→    ball: ball as any,
+   642→   642→    inningsState: {
+   643→   643→      runs: newRuns,
+   644→   644→      wickets: newWickets,
+   645→   645→      completedOvers: newCompletedOvers,
+   646→   646→      currentBalls: newCurrentBalls,
+   647→   647→      currentRunRate: calculateCRR(newRuns, newCompletedOvers, newCurrentBalls),
+   648→   648→      requiredRunRate: innings.target
+   649→   649→        ? calculateRRR(innings.target - newRuns, match.totalOvers, newCompletedOvers, newCurrentBalls)
+   650→   650→        : null,
+   651→   651→      runsNeeded: innings.target ? innings.target - newRuns : null,
+   652→   652→      ballsRemaining,
+   653→   653→      isCompleted: isInningsComplete,
+   654→   654→      isOverComplete,
+   655→   655→    },
+   656→   656→    strikerUpdate: { strikerId: newStrikerId, nonStrikerId: newNonStrikerId },
+   657→   657→    needsNewBatsman: isWicket && !isInningsComplete,
+   658→   658→    needsNewBowler: isOverComplete && !isInningsComplete,
+   659→   659→    needsInningsBreak: isInningsComplete && innings.inningsNumber === 1,
+   660→   660→    isMatchComplete: isInningsComplete && innings.inningsNumber === 2,
+   661→   661→  };
+   662→   662→}
+   663→   663→
+   664→   664→export async function undoLastBall(
+   665→   665→  prisma: PrismaClient,
+   666→   666→  inningsId: string
+   667→   667→): Promise<{ success: boolean }> {
+   668→   668→  // 1. Get last ball
+   669→   669→  const lastBall = await prisma.ball.findFirst({
+   670→   670→    where: { inningsId },
+   671→   671→    orderBy: { deliveryNumber: 'desc' },
+   672→   672→  });
+   673→   673→  if (!lastBall) return { success: false };
+   674→   674→
+   675→   675→  const innings = await prisma.innings.findUniqueOrThrow({ where: { id: inningsId }, include: { match: true } });
+   676→   676→
+   677→   677→  const isWide = lastBall.extraType === 'WIDE';
+   678→   678→  const isNoBall = lastBall.extraType === 'NO_BALL';
+   679→   679→  const isBye = lastBall.extraType === 'BYE';
+   680→   680→  const isLegBye = lastBall.extraType === 'LEG_BYE';
+   681→   681→  const totalRuns = lastBall.runs + lastBall.extraRuns;
+   682→   682→  const runsAgainstBowler = (isBye || isLegBye) ? 0 : totalRuns;
+   683→   683→
+   684→   684→  // 2. Reverse BatsmanInnings
+   685→   685→  await prisma.batsmanInnings.update({
+   686→   686→    where: { inningsId_playerId: { inningsId, playerId: lastBall.batsmanId } },
+   687→   687→    data: {
+   688→   688→      runs: { decrement: lastBall.runs },
+   689→   689→      balls: { decrement: isWide ? 0 : 1 },
+   690→   690→      fours: { decrement: lastBall.runs === 4 && !isBye && !isLegBye ? 1 : 0 },
+   691→   691→      sixes: { decrement: lastBall.runs === 6 && !isBye && !isLegBye ? 1 : 0 },
+   692→   692→      ...(lastBall.isWicket ? { isOut: false, dismissalType: null, dismissedByBowlerId: null, fielderPlayerId: null } : {}),
+   693→   693→    },
+   694→   694→  });
+   695→   695→
+   696→   696→  // Reverse non-striker run-out
+   697→   697→  if (lastBall.isWicket && lastBall.wicketType === 'RUN_OUT' && lastBall.dismissedPlayerId === lastBall.nonStrikerIdBefore) {
+   698→   698→    await prisma.batsmanInnings.update({
+   699→   699→      where: { inningsId_playerId: { inningsId, playerId: lastBall.nonStrikerIdBefore } },
+   700→   700→      data: { isOut: false, dismissalType: null },
+   701→   701→    });
+   702→   702→  }
+   703→   703→
+   704→   704→  // 3. Reverse BowlerInnings
+   705→   705→  const bowlerInnings = await prisma.bowlerInnings.findUnique({
+   706→   706→    where: { inningsId_playerId: { inningsId, playerId: lastBall.bowlerId } },
+   707→   707→  });
+   708→   708→  if (bowlerInnings) {
+   709→   709→    const wasOverBall = lastBall.isLegalDelivery && lastBall.ballInOver === 6;
+   710→   710→    await prisma.bowlerInnings.update({
+   711→   711→      where: { inningsId_playerId: { inningsId, playerId: lastBall.bowlerId } },
+   712→   712→      data: {
+   713→   713→        runs: { decrement: runsAgainstBowler },
+   714→   714→        balls: wasOverBall ? 0 : { decrement: lastBall.isLegalDelivery ? 1 : 0 },
+   715→   715→        ...(wasOverBall ? { completedOvers: { decrement: 1 }, balls: 5 } : {}),
+   716→   716→        ...(lastBall.isWicket && !['RUN_OUT','RETIRED_HURT'].includes(lastBall.wicketType ?? '') ? { wickets: { decrement: 1 } } : {}),
+   717→   717→        ...(isWide ? { wides: { decrement: 1 } } : {}),
+   718→   718→        ...(isNoBall ? { noBalls: { decrement: 1 } } : {}),
+   719→   719→      },
+   720→   720→    });
+   721→   721→  }
+   722→   722→
+   723→   723→  // 4. Reverse Innings
+   724→   724→  const wasOverComplete = lastBall.isLegalDelivery && lastBall.ballInOver === 6;
+   725→   725→  const restoredBalls = wasOverComplete ? 5 : (lastBall.isLegalDelivery ? Math.max(0, innings.currentBalls - 1) : innings.currentBalls);
+   726→   726→  const restoredCompletedOvers = innings.completedOvers - (wasOverComplete ? 1 : 0);
+   727→   727→
+   728→   728→  await prisma.innings.update({
+   729→   729→    where: { id: inningsId },
+   730→   730→    data: {
+   731→   731→      runs: { decrement: totalRuns },
+   732→   732→      wickets: { decrement: lastBall.isWicket ? 1 : 0 },
+   733→   733→      completedOvers: restoredCompletedOvers,
+   734→   734→      currentBalls: restoredBalls,
+   735→   735→      wideBalls: { decrement: isWide ? 1 : 0 },
+   736→   736→      noBalls: { decrement: isNoBall ? 1 : 0 },
+   737→   737→      byes: { decrement: isBye ? lastBall.extraRuns : 0 },
+   738→   738→      legByes: { decrement: isLegBye ? lastBall.extraRuns : 0 },
+   739→   739→      strikerId: lastBall.strikerIdBefore,
+   740→   740→      nonStrikerId: lastBall.nonStrikerIdBefore,
+   741→   741→    },
+   742→   742→  });
+   743→   743→
+   744→   744→  // 5. Delete Ball record
+   745→   745→  await prisma.ball.delete({ where: { id: lastBall.id } });
+   746→   746→
+   747→   747→  return { success: true };
+   748→   748→}
+   749→   749→
+   750→   750→
+   751→   751→STEP 6 — Scoring Utils (lib/scoring-utils.ts)
+   752→   752→
+   753→   753→typescript// lib/scoring-utils.ts
+   754→   754→
+   755→   755→export function decimalOvers(completedOvers: number, balls: number): number {
+   756→   756→  return completedOvers + balls / 6;
+   757→   757→}
+   758→   758→
+   759→   759→export function calculateCRR(runs: number, completedOvers: number, balls: number): number {
+   760→   760→  const ov = decimalOvers(completedOvers, balls);
+   761→   761→  if (ov === 0) return 0;
+   762→   762→  return Math.round((runs / ov) * 100) / 100;
+   763→   763→}
+   764→   764→
+   765→   765→export function calculateRRR(
+   766→   766→  runsNeeded: number,
+   767→   767→  totalOvers: number,
+   768→   768→  completedOvers: number,
+   769→   769→  balls: number
+   770→   770→): number {
+   771→   771→  const ballsTotal = totalOvers * 6;
+   772→   772→  const ballsUsed = completedOvers * 6 + balls;
+   773→   773→  const ballsLeft = ballsTotal - ballsUsed;
+   774→   774→  if (ballsLeft <= 0) return runsNeeded > 0 ? 99.99 : 0;
+   775→   775→  const oversLeft = ballsLeft / 6;
+   776→   776→  return Math.round((runsNeeded / oversLeft) * 100) / 100;
+   777→   777→}
+   778→   778→
+   779→   779→export function formatOvers(completedOvers: number, balls: number): string {
+   780→   780→  return `${completedOvers}.${balls}`;
+   781→   781→}
+   782→   782→
+   783→   783→export function formatBowlingFigures(completedOvers: number, balls: number, runs: number, wickets: number): string {
+   784→   784→  return `${completedOvers}.${balls}-${runs}-${wickets}`;
+   785→   785→}
+   786→   786→
+   787→   787→export function formatStrikeRate(runs: number, balls: number): string {
+   788→   788→  if (balls === 0) return '0.00';
+   789→   789→  return ((runs / balls) * 100).toFixed(1);
+   790→   790→}
+   791→   791→
+   792→   792→export function formatEconomy(runs: number, completedOvers: number, balls: number): string {
+   793→   793→  const ov = decimalOvers(completedOvers, balls);
+   794→   794→  if (ov === 0) return '0.00';
+   795→   795→  return (runs / ov).toFixed(2);
+   796→   796→}
+   797→   797→
+   798→   798→export function formatBattingAverage(runs: number, dismissals: number): string {
+   799→   799→  if (dismissals === 0) return runs > 0 ? '∞' : '0.00';
+   800→   800→  return (runs / dismissals).toFixed(2);
+   801→   801→}
+   802→   802→
+   803→   803→export function calculateNRR(
+   804→   804→  runsScored: number,
+   805→   805→  oversFaced: number,
+   806→   806→  runsConceded: number,
+   807→   807→  oversBowled: number
+   808→   808→): number {
+   809→   809→  const rpo_scored = oversFaced > 0 ? runsScored / oversFaced : 0;
+   810→   810→  const rpo_conceded = oversBowled > 0 ? runsConceded / oversBowled : 0;
+   811→   811→  return Math.round((rpo_scored - rpo_conceded) * 1000) / 1000;
+   812→   812→}
+   813→   813→
+   814→   814→export function generateResultString(
+   815→   815→  battingFirstTeamName: string,
+   816→   816→  chasingTeamName: string,
+   817→   817→  inn1Runs: number,
+   818→   818→  inn2Runs: number,
+   819→   819→  inn2Wickets: number,
+   820→   820→  inn2Completed: boolean,
+   821→   821→  inn2Overs: number,
+   822→   822→  inn2CurrentBalls: number,
+   823→   823→  totalOvers: number,
+   824→   824→  maxWickets: number
+   825→   825→): string {
+   826→   826→  if (inn2Runs >= inn1Runs + 1) {
+   827→   827→    const wicketsRemaining = maxWickets - inn2Wickets;
+   828→   828→    const ballsUsed = inn2Overs * 6 + inn2CurrentBalls;
+   829→   829→    const ballsTotal = totalOvers * 6;
+   830→   830→    const ballsRemaining = ballsTotal - ballsUsed;
+   831→   831→    if (ballsRemaining > 0) {
+   832→   832→      return `${chasingTeamName} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''} (${ballsRemaining} balls remaining)`;
+   833→   833→    }
+   834→   834→    return `${chasingTeamName} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''}`;
+   835→   835→  }
+   836→   836→  if (inn2Runs < inn1Runs + 1) {
+   837→   837→    return `${battingFirstTeamName} won by ${inn1Runs - inn2Runs} run${inn1Runs - inn2Runs !== 1 ? 's' : ''}`;
+   838→   838→  }
+   839→   839→  return `Match tied — both teams scored ${inn1Runs}`;
+   840→   840→}
+   841→   841→
+   842→   842→export function getManOfMatch(batting: { player: { name: string }; runs: number; balls: number }[], bowling: { player: { name: string }; wickets: number; runs: number }[]): string {
+   843→   843→  // Wickets priority: if any bowler took 3+, they're MoM
+   844→   844→  const topBowler = [...bowling].sort((a, b) => b.wickets - a.wickets || a.runs - b.runs)[0];
+   845→   845→  if (topBowler && topBowler.wickets >= 3) return topBowler.player.name;
+   846→   846→  const topBatsman = [...batting].sort((a, b) => b.runs - a.runs)[0];
+   847→   847→  return topBatsman?.player?.name ?? 'N/A';
+   848→   848→}
+   849→   849→
+   850→   850→export function generateRoundRobinSchedule(teamIds: string[]): [string, string][] {
+   851→   851→  const n = teamIds.length;
+   852→   852→  const teams = n % 2 === 0 ? [...teamIds] : [...teamIds, 'BYE'];
+   853→   853→  const rounds: [string, string][] = [];
+   854→   854→  const t = teams.length;
+   855→   855→  const pivot = teams[0];
+   856→   856→  const rotatable = teams.slice(1);
+   857→   857→  for (let round = 0; round < t - 1; round++) {
+   858→   858→    const current = [pivot, ...rotatable];
+   859→   859→    for (let i = 0; i < t / 2; i++) {
+   860→   860→      if (current[i] !== 'BYE' && current[t - 1 - i] !== 'BYE') {
+   861→   861→        rounds.push([current[i], current[t - 1 - i]]);
+   862→   862→      }
+   863→   863→    }
+   864→   864→    rotatable.unshift(rotatable.pop()!);
+   865→   865→  }
+   866→   866→  return rounds;
+   867→   867→}
+   868→   868→
+   869→   869→
+   870→   870→STEP 7 — API Routes
+   871→   871→
+   872→   872→Implement all routes. Key patterns:
+   873→   873→
+   874→   874→typescript// app/api/matches/[id]/innings/[iid]/balls/route.ts
+   875→   875→import { NextRequest, NextResponse } from 'next/server';
+   876→   876→import { prisma } from '@/lib/prisma';
+   877→   877→import { recordBall } from '@/lib/scoring-engine';
+   878→   878→
+   879→   879→export async function POST(
+   880→   880→  req: NextRequest,
+   881→   881→  { params }: { params: { id: string; iid: string } }
+   882→   882→) {
+   883→   883→  try {
+   884→   884→    const body = await req.json();
+   885→   885→    const result = await recordBall(prisma, params.iid, body);
+   886→   886→    return NextResponse.json(result);
+   887→   887→  } catch (error: any) {
+   888→   888→    console.error('Ball record error:', error);
+   889→   889→    return NextResponse.json({ error: error.message }, { status: 500 });
+   890→   890→  }
+   891→   891→}
+   892→   892→
+   893→   893→Follow this pattern for every route. Always:
+   894→   894→
+   895→   895→
+   896→   896→Validate params exist
+   897→   897→Wrap in try-catch
+   898→   898→Return { error: string } with appropriate status codes on failure
+   899→   899→Use Prisma include to return related data
+   900→   900→Return NextResponse.json(data) on success
+   901→   901→
+   902→   902→
+   903→   903→All GET routes for matches and innings should include full nested data (teams, players, batting, bowling, balls).
+   904→   904→
+   905→   905→
+   906→   906→STEP 8 — Zustand Store (store/matchStore.ts)
+   907→   907→
+   908→   908→typescriptimport { create } from 'zustand';
+   909→   909→import type { MatchStoreState, MatchData, InningsState, ScoringState, RecordBallResponse } from '@/types';
+   910→   910→
+   911→   911→export const useMatchStore = create<MatchStoreState>((set) => ({
+   912→   912→  currentState: 'SETUP_OPENER_1',
+   913→   913→  match: null,
+   914→   914→  currentInnings: null,
+   915→   915→  strikerId: null,
+   916→   916→  nonStrikerId: null,
+   917→   917→  currentBowlerId: null,
+   918→   918→  lastBallResult: null,
+   919→   919→  isSubmitting: false,
+   920→   920→
+   921→   921→  setMatch: (match) => set({ match }),
+   922→   922→  setCurrentInnings: (innings) => set({
+   923→   923→    currentInnings: innings,
+   924→   924→    strikerId: innings.strikerId ?? null,
+   925→   925→    nonStrikerId: innings.nonStrikerId ?? null,
+   926→   926→    currentBowlerId: innings.currentBowlerId ?? null,
+   927→   927→  }),
+   928→   928→  setStrike: (strikerId, nonStrikerId) => set({ strikerId, nonStrikerId }),
+   929→   929→  setBowler: (bowlerId) => set({ currentBowlerId: bowlerId }),
+   930→   930→  setState: (state) => set({ currentState: state }),
+   931→   931→  setSubmitting: (v) => set({ isSubmitting: v }),
+   932→   932→  setLastBallResult: (result) => set({ lastBallResult: result }),
+   933→   933→  reset: () => set({
+   934→   934→    currentState: 'SETUP_OPENER_1',
+   935→   935→    match: null,
+   936→   936→    currentInnings: null,
+   937→   937→    strikerId: null,
+   938→   938→    nonStrikerId: null,
+   939→   939→    currentBowlerId: null,
+   940→   940→    lastBallResult: null,
+   941→   941→    isSubmitting: false,
+   942→   942→  }),
+   943→   943→}));
+   944→   944→
+   945→   945→
+   946→   946→STEP 9 — Page Implementations
+   947→   947→
+   948→   948→Dashboard (app/page.tsx)
+   949→   949→
+   950→   950→Fetch and display:
+   951→   951→
+   952→   952→
+   953→   953→Any LIVE match → <LiveMatchBanner match={liveMatch} />
+   954→   954→Last 6 completed matches → <RecentMatchCard /> (horizontal scroll)
+   955→   955→Active tournaments → tournament cards
+   956→   956→Quick stats: total matches, teams, tournaments
+   957→   957→
+   958→   958→
+   959→   959→Use SWR for data: useSWR('/api/matches?status=LIVE'), useSWR('/api/matches?status=COMPLETED&limit=6'), useSWR('/api/tournaments?status=ONGOING')
+   960→   960→
+   961→   961→Include <Suspense> + skeleton loaders for each section.
+   962→   962→
+   963→   963→Scoring Screen (app/matches/[id]/page.tsx)
+   964→   964→
+   965→   965→This page is the most complex. Implement it as:
+   966→   966→
+   967→   967→
+   968→   968→Load match from API with SWR
+   969→   969→Initialize useMatchStore with match data
+   970→   970→Detect current scoring state from match/innings status
+   971→   971→Render based on currentState:
+   972→   972→
+   973→   973→SCORING → Main scoring UI
+   974→   974→INNINGS_BREAK → <InningsBreakScreen />
+   975→   975→MATCH_RESULT → <MatchResultScreen />
+   976→   976→All other states → appropriate modals overlaid on top of scoring UI
+   977→   977→
+   978→   978→
+   979→   979→
+   980→   980→
+   981→   981→
+   982→   982→ScoreButtons component behavior:
+   983→   983→
+   984→   984→tsx// Scoring buttons: 0,1,2,3,4,6 in a 3x2 grid
+   985→   985→// On tap:
+   986→   986→const handleScore = async (runs: number) => {
+   987→   987→  store.setState('PROCESSING'); // disable all buttons immediately
+   988→   988→  try {
+   989→   989→    const result = await fetch(`/api/matches/${matchId}/innings/${inningsId}/balls`, {
+   990→   990→      method: 'POST',
+   991→   991→      headers: { 'Content-Type': 'application/json' },
+   992→   992→      body: JSON.stringify({
+   993→   993→        batsmanId: store.strikerId,
+   994→   994→        bowlerId: store.currentBowlerId,
+   995→   995→        runs,
+   996→   996→        isWicket: false,
+   997→   997→        extraType: null,
+   998→   998→        extraRuns: 0,
+   999→   999→      }),
+  1000→  1000→    }).then(r => r.json());
+  1001→  1001→
+  1002→  1002→    // Optimistic update then sync
+  1003→  1003→    store.setLastBallResult(result);
+  1004→  1004→    store.setStrike(result.strikerUpdate.strikerId, result.strikerUpdate.nonStrikerId);
+  1005→  1005→    mutate(); // SWR revalidate
+  1006→  1006→
+  1007→  1007→    // State transitions
+  1008→  1008→    if (result.isMatchComplete) store.setState('MATCH_RESULT');
+  1009→  1009→    else if (result.needsInningsBreak) store.setState('INNINGS_BREAK');
+  1010→  1010→    else if (result.needsNewBatsman) store.setState('NEW_BATSMAN');
+  1011→  1011→    else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
+  1012→  1012→    else store.setState('SCORING');
+  1013→  1013→  } catch {
+  1014→  1014→    store.setState('SCORING'); // restore on error, show toast
+  1015→  1015→  }
+  1016→  1016→};
+  1017→  1017→
+  1018→  1018→Animate score updates with Framer Motion:
+  1019→  1019→
+  1020→  1020→tsx// When runs change, animate the score counter
+  1021→  1021→<motion.div
+  1022→  1022→  key={inningsState.runs} // key change triggers re-animation
+  1023→  1023→  initial={{ scale: 1.3, opacity: 0.6 }}
+  1024→  1024→  animate={{ scale: 1, opacity: 1 }}
+  1025→  1025→  transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+  1026→  1026→>
+  1027→  1027→  {inningsState.runs}
+  1028→  1028→</motion.div>
+  1029→  1029→
+  1030→  1030→Wicket animation:
+  1031→  1031→
+  1032→  1032→tsx// Flash red on wicket
+  1033→  1033→<motion.div
+  1034→  1034→  animate={isWicket ? { backgroundColor: ['transparent', 'rgba(255,68,68,0.2)', 'transparent'] } : {}}
+  1035→  1035→  transition={{ duration: 0.4 }}
+  1036→  1036→>
+  1037→  1037→
+  1038→  1038→Scorecard Page (app/matches/[id]/scorecard/page.tsx)
+  1039→  1039→
+  1040→  1040→
+  1041→  1041→Fetch full scorecard from /api/matches/[id]/scorecard
+  1042→  1042→Render <ScorecardView> with id="scorecard-export"
+  1043→  1043→Implement share button:
+  1044→  1044→
+  1045→  1045→
+  1046→  1046→tsxconst handleShare = async () => {
+  1047→  1047→  const canvas = await html2canvas(document.getElementById('scorecard-export')!, {
+  1048→  1048→    backgroundColor: '#070710',
+  1049→  1049→    scale: 2,
+  1050→  1050→  });
+  1051→  1051→  const blob = await new Promise<Blob>(r => canvas.toBlob(b => r(b!), 'image/png'));
+  1052→  1052→  if (navigator.share) {
+  1053→  1053→    await navigator.share({ files: [new File([blob], 'scorecard.png', { type: 'image/png' })] });
+  1054→  1054→  } else {
+  1055→  1055→    const url = URL.createObjectURL(blob);
+  1056→  1056→    const a = document.createElement('a'); a.href = url; a.download = 'scorecard.png'; a.click();
+  1057→  1057→  }
+  1058→  1058→};
+  1059→  1059→
+  1060→  1060→
+  1061→  1061→STEP 10 — Component Implementations
+  1062→  1062→
+  1063→  1063→ScoreDisplay.tsx
+  1064→  1064→
+  1065→  1065→tsx// Shows: runs/wickets (hero), overs, CRR, target/RRR (if 2nd innings)
+  1066→  1066→// All numbers use font-mono class
+  1067→  1067→// CRR and RRR update on every ball
+  1068→  1068→// Colors: RRR > CRR*1.3 → red (difficult chase), otherwise accent green
+  1069→  1069→
+  1070→  1070→OverStrip.tsx
+  1071→  1071→
+  1072→  1072→tsx// 6 slots, shows current over's balls
+  1073→  1073→// Each slot: a colored circle/badge per ball type
+  1074→  1074→// Animate new ball addition: slide in from right
+  1075→  1075→// Long press → open EditBallModal
+  1076→  1076→
+  1077→  1077→BatsmenCard.tsx
+  1078→  1078→
+  1079→  1079→tsx// Two rows: striker (asterisk in accent color) and non-striker
+  1080→  1080→// Shows: name, runs(balls), SR
+  1081→  1081→// Tap name → could show career stats (out of scope, but placeholder)
+  1082→  1082→// Striker name in slightly larger text, teal color
+  1083→  1083→
+  1084→  1084→PlayerSelectModal.tsx
+  1085→  1085→
+  1086→  1086→tsx// Generic modal for selecting batsman or bowler
+  1087→  1087→// Props: players[], title, onSelect, disabledPlayerIds
+  1088→  1088→// Bowler mode: show figures, disable last bowler
+  1089→  1089→// Batsman mode: show not-out players sorted by batting order
+  1090→  1090→// Non-dismissable (user MUST select)
+  1091→  1091→// Search input for large squads
+  1092→  1092→
+  1093→  1093→WicketModal.tsx
+  1094→  1094→
+  1095→  1095→tsx// Step 1: Dismissal type grid (6 buttons with icons)
+  1096→  1096→// Step 2: Conditional extra info (fielder, run-out batsman)
+  1097→  1097→// Disable non-RUN_OUT types if no-ball was involved
+  1098→  1098→// Confirm button → calls handleWicket(dismissalData)
+  1099→  1099→
+  1100→  1100→PointsTable.tsx
+  1101→  1101→
+  1102→  1102→tsx// Sortable table: Rank | Team | P | W | L | T | Pts | NRR
+  1103→  1103→// Leader: gold left border + subtle gold background
+  1104→  1104→// NRR: format as +1.250 or -0.875 with color (green/red)
+  1105→  1105→// Animate rank changes (TBD for live tournament updates)
+  1106→  1106→
+  1107→  1107→
+  1108→  1108→STEP 11 — Sample Data Seed (prisma/seed.ts)
+  1109→  1109→
+  1110→  1110→The seed must produce a believable, fully-playable dataset. Structure:
+  1111→  1111→
+  1112→  1112→typescriptimport { PrismaClient } from '@prisma/client';
+  1113→  1113→const prisma = new PrismaClient();
+  1114→  1114→
+  1115→  1115→async function main() {
+  1116→  1116→  // Clear existing data
+  1117→  1117→  await prisma.$executeRaw`DELETE FROM Ball`;
+  1118→  1118→  await prisma.$executeRaw`DELETE FROM BatsmanInnings`;
+  1119→  1119→  await prisma.$executeRaw`DELETE FROM BowlerInnings`;
+  1120→  1120→  await prisma.$executeRaw`DELETE FROM Innings`;
+  1121→  1121→  await prisma.$executeRaw`DELETE FROM Match`;
+  1122→  1122→  await prisma.$executeRaw`DELETE FROM TournamentTeam`;
+  1123→  1123→  await prisma.$executeRaw`DELETE FROM Tournament`;
+  1124→  1124→  await prisma.$executeRaw`DELETE FROM Player`;
+  1125→  1125→  await prisma.$executeRaw`DELETE FROM Team`;
+  1126→  1126→
+  1127→  1127→  // 1. Create 6 teams with 10-11 players each
+  1128→  1128→  // Use realistic South Asian cricket player names
+  1129→  1129→  // Teams: Colony Strikers, Gali Warriors, Roof Rockets, Midnight Snipers, Dusty Dynamos, Alley Aces
+  1130→  1130→  
+  1131→  1131→  // 2. Create 1 active tournament (Colony Premier League)
+  1132→  1132→  // 4 teams, round robin, 10 overs
+  1133→  1133→  // Generate schedule for 4 teams: 6 matches
+  1134→  1134→  
+  1135→  1135→  // 3. Seed 3 COMPLETED matches with full ball-by-ball data:
+  1136→  1136→  //    - For each match: create Innings records, then use the scoring engine
+  1137→  1137→  //      logic to seed Ball records, BatsmanInnings, BowlerInnings
+  1138→  1138→  //    - Each completed innings: 60 balls (10 overs), realistic run distribution
+  1139→  1139→  //    - Realistic cricket scoring: mix of 0s (40%), 1s (25%), 2s (10%), 4s (10%), 6s (5%), wickets (8%), extras (2%)
+  1140→  1140→  
+  1141→  1141→  // 4. Seed 1 LIVE match at mid-point (over 5 of 10, innings 1)
+  1142→  1142→  //    - 30 balls already recorded
+  1143→  1143→  //    - Realistic in-progress state
+  1144→  1144→  
+  1145→  1145→  // HELPER: Seeding a completed innings
+  1146→  1146→  // Rather than calling the API, directly insert records:
+  1147→  1147→  //   - For each ball: calculate stats manually and insert Ball, update Innings/BatsmanInnings/BowlerInnings
+  1148→  1148→  //   - Or: create a simplified seedInnings(prisma, innings, balls[]) helper that applies the same logic as recordBall
+  1149→  1149→}
+  1150→  1150→
+  1151→  1151→main().then(() => prisma.$disconnect()).catch(console.error);
+  1152→  1152→
+  1153→  1153→Realistic ball sequence for a 50-run innings (5 overs):
+  1154→  1154→
+  1155→  1155→[0,1,4,0,1,2], [6,1,0,W,1,0], [0,1,1,4,0,1], [2,0,1,1,Wd,1,1], [6,0,1,4,1,0]
+  1156→  1156→
+  1157→  1157→Build a createSeedInnings(prisma, inningsData, ballSequence[]) function and call it for each seeded match. This is the most important part of the seed — without realistic ball data, the scorecard pages look empty.
+  1158→  1158→
+  1159→  1159→
+  1160→  1160→STEP 12 — Tailwind Configuration (tailwind.config.ts)
+  1161→  1161→
+  1162→  1162→typescriptimport type { Config } from 'tailwindcss';
+  1163→  1163→
+  1164→  1164→const config: Config = {
+  1165→  1165→  darkMode: ['class', '[data-theme="dark"]'],
+  1166→  1166→  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],
+  1167→  1167→  theme: {
+  1168→  1168→    extend: {
+  1169→  1169→      colors: {
+  1170→  1170→        accent: 'var(--accent)',
+  1171→  1171→        gold: 'var(--gold)',
+  1172→  1172→        'run-4': 'var(--run-4)',
+  1173→  1173→        'run-6': 'var(--run-6)',
+  1174→  1174→        wicket: 'var(--wicket)',
+  1175→  1175→        'bg-app': 'var(--bg-app)',
+  1176→  1176→        'bg-card': 'var(--bg-card)',
+  1177→  1177→        'bg-elevated': 'var(--bg-elevated)',
+  1178→  1178→        'bg-input': 'var(--bg-input)',
+  1179→  1179→        't1': 'var(--text-1)',
+  1180→  1180→        't2': 'var(--text-2)',
+  1181→  1181→        't3': 'var(--text-3)',
+  1182→  1182→      },
+  1183→  1183→      fontFamily: {
+  1184→  1184→        sans: ['var(--font-inter)'],
+  1185→  1185→        mono: ['var(--font-mono)'],
+  1186→  1186→      },
+  1187→  1187→      borderRadius: {
+  1188→  1188→        DEFAULT: '16px',
+  1189→  1189→      },
+  1190→  1190→      animation: {
+  1191→  1191→        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+  1192→  1192→        'slide-up': 'slideUp 0.22s ease-out',
+  1193→  1193→      },
+  1194→  1194→      keyframes: {
+  1195→  1195→        slideUp: { '0%': { transform: 'translateY(20px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+  1196→  1196→      },
+  1197→  1197→    },
+  1198→  1198→  },
+  1199→  1199→  plugins: [],
+  1200→  1200→};
+  1201→  1201→export default config;
+  1202→  1202→
+  1203→  1203→
+  1204→  1204→STEP 13 — Root Layout (app/layout.tsx)
+  1205→  1205→
+  1206→  1206→tsximport { Inter, JetBrains_Mono } from 'next/font/google';
+  1207→  1207→import { BottomNav } from '@/components/layout/BottomNav';
+  1208→  1208→import { Toaster } from '@/components/ui/toaster';
+  1209→  1209→import './globals.css';
+  1210→  1210→
+  1211→  1211→const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+  1212→  1212→const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+  1213→  1213→
+  1214→  1214→export const metadata = {
+  1215→  1215→  title: 'GullyScore — Cricket Scoring',
+  1216→  1216→  description: 'Ball-by-ball cricket scoring for gully matches and local tournaments',
+  1217→  1217→  manifest: '/manifest.json',
+  1218→  1218→  themeColor: '#070710',
+  1219→  1219→  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  1220→  1220→};
+  1221→  1221→
+  1222→  1222→export default function RootLayout({ children }: { children: React.ReactNode }) {
+  1223→  1223→  return (
+  1224→  1224→    <html lang="en" data-theme="dark" className={`${inter.variable} ${mono.variable}`}>
+  1225→  1225→      <body>
+  1226→  1226→        <main className="min-h-dvh pb-20">
+  1227→  1227→          {children}
+  1228→  1228→        </main>
+  1229→  1229→        <BottomNav />
+  1230→  1230→        <Toaster />
+  1231→  1231→      </body>
+  1232→  1232→    </html>
+  1233→  1233→  );
+  1234→  1234→}
+  1235→  1235→
+  1236→  1236→
+  1237→  1237→STEP 14 — Navigation Component (components/layout/BottomNav.tsx)
+  1238→  1238→
+  1239→  1239→tsx'use client';
+  1240→  1240→import { usePathname } from 'next/navigation';
+  1241→  1241→import Link from 'next/link';
+  1242→  1242→import { Home, ClipboardList, Users, Trophy } from 'lucide-react';
+  1243→  1243→
+  1244→  1244→const tabs = [
+  1245→  1245→  { href: '/', label: 'Home', icon: Home, match: (p: string) => p === '/' },
+  1246→  1246→  { href: '/matches', label: 'Matches', icon: ClipboardList, match: (p: string) => p.startsWith('/matches') },
+  1247→  1247→  { href: '/teams', label: 'Teams', icon: Users, match: (p: string) => p.startsWith('/teams') },
+  1248→  1248→  { href: '/tournaments', label: 'Leagues', icon: Trophy, match: (p: string) => p.startsWith('/tournaments') },
+  1249→  1249→];
+  1250→  1250→
+  1251→  1251→export function BottomNav() {
+  1252→  1252→  const pathname = usePathname();
+  1253→  1253→  // Hide on scoring screen (full-screen experience)
+  1254→  1254→  if (pathname.match(/\/matches\/[^/]+$/)) return null;
+  1255→  1255→
+  1256→  1256→  return (
+  1257→  1257→    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t"
+  1258→  1258→      style={{ borderColor: 'var(--border)', background: 'rgba(7,7,16,0.9)', backdropFilter: 'blur(16px)' }}>
+  1259→  1259→      <div className="flex items-center justify-around h-16 pb-safe">
+  1260→  1260→        {tabs.map(({ href, label, icon: Icon, match }) => {
+  1261→  1261→          const active = match(pathname);
+  1262→  1262→          return (
+  1263→  1263→            <Link key={href} href={href}
+  1264→  1264→              className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
+  1265→  1265→                active ? 'text-[var(--accent)]' : 'text-[var(--text-3)]'
+  1266→  1266→              }`}>
+  1267→  1267→              <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
+  1268→  1268→              <span className="text-xs font-medium">{label}</span>
+  1269→  1269→            </Link>
+  1270→  1270→          );
+  1271→  1271→        })}
+  1272→  1272→      </div>
+  1273→  1273→    </nav>
+  1274→  1274→  );
+  1275→  1275→}
+  1276→  1276→
+  1277→  1277→
+  1278→  1278→STEP 15 — Prisma Client Singleton (lib/prisma.ts)
+  1279→  1279→
+  1280→  1280→typescript// lib/prisma.ts
+  1281→  1281→import { PrismaClient } from '@prisma/client';
+  1282→  1282→
+  1283→  1283→const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+  1284→  1284→
+  1285→  1285→export const prisma = globalForPrisma.prisma || new PrismaClient({
+  1286→  1286→  log: process.env.NODE_ENV === 'development' ? ['query'] : [],
+  1287→  1287→});
+  1288→  1288→
+  1289→  1289→if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+  1290→  1290→
+  1291→  1291→
+  1292→  1292→STEP 16 — Share Utility (lib/share.ts)
+  1293→  1293→
+  1294→  1294→typescript// lib/share.ts
+  1295→  1295→import html2canvas from 'html2canvas';
+  1296→  1296→
+  1297→  1297→export async function exportScorecardImage(elementId: string): Promise<void> {
+  1298→  1298→  const element = document.getElementById(elementId);
+  1299→  1299→  if (!element) throw new Error('Scorecard element not found');
+  1300→  1300→
+  1301→  1301→  const canvas = await html2canvas(element, {
+  1302→  1302→    backgroundColor: '#070710',
+  1303→  1303→    scale: 2,
+  1304→  1304→    useCORS: true,
+  1305→  1305→    allowTaint: false,
+  1306→  1306→  });
+  1307→  1307→
+  1308→  1308→  const blob = await new Promise<Blob>((resolve, reject) => {
+  1309→  1309→    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas export failed')), 'image/png');
+  1310→  1310→  });
+  1311→  1311→
+  1312→  1312→  const file = new File([blob], 'gullyscore-scorecard.png', { type: 'image/png' });
+  1313→  1313→
+  1314→  1314→  if (navigator.canShare?.({ files: [file] })) {
+  1315→  1315→    await navigator.share({ files: [file], title: 'GullyScore Scorecard' });
+  1316→  1316→  } else {
+  1317→  1317→    const url = URL.createObjectURL(blob);
+  1318→  1318→    const a = document.createElement('a');
+  1319→  1319→    a.href = url;
+  1320→  1320→    a.download = 'gullyscore-scorecard.png';
+  1321→  1321→    document.body.appendChild(a);
+  1322→  1322→    a.click();
+  1323→  1323→    document.body.removeChild(a);
+  1324→  1324→    URL.revokeObjectURL(url);
+  1325→  1325→  }
+  1326→  1326→}
+  1327→  1327→
+  1328→  1328→export function generateWhatsAppSummary(match: any): string {
+  1329→  1329→  const inn1 = match.innings[0];
+  1330→  1330→  const inn2 = match.innings[1];
+  1331→  1331→  const date = new Date(match.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  1332→  1332→  
+  1333→  1333→  const topBat1 = [...inn1.batting].sort((a: any, b: any) => b.runs - a.runs)[0];
+  1334→  1334→  const topBowl1 = [...inn1.bowling].sort((a: any, b: any) => b.wickets - a.wickets)[0];
+  1335→  1335→  const topBat2 = inn2 ? [...inn2.batting].sort((a: any, b: any) => b.runs - a.runs)[0] : null;
+  1336→  1336→  const topBowl2 = inn2 ? [...inn2.bowling].sort((a: any, b: any) => b.wickets - a.wickets)[0] : null;
+  1337→  1337→
+  1338→  1338→  return `🏏 *GullyScore Match Report*
+  1339→  1339→📅 ${date}${match.venue ? ` | ${match.venue}` : ''}
+  1340→  1340→
+  1341→  1341→*${match.team1.name}* vs *${match.team2.name}*
+  1342→  1342→
+  1343→  1343→🏏 1st Innings: ${inn1.team.name}
+  1344→  1344→Score: *${inn1.runs}/${inn1.wickets}* (${inn1.completedOvers}.${inn1.currentBalls} ov)
+  1345→  1345→${topBat1 ? `Top bat: ${topBat1.player.name} — ${topBat1.runs}(${topBat1.balls})` : ''}
+  1346→  1346→${topBowl1 ? `Best bowl: ${topBowl1.player.name} — ${topBowl1.wickets}/${topBowl1.runs}` : ''}
+  1347→  1347→
+  1348→  1348→${inn2 ? `🏏 2nd Innings: ${inn2.team.name}
+  1349→  1349→Score: *${inn2.runs}/${inn2.wickets}* (${inn2.completedOvers}.${inn2.currentBalls} ov)
+  1350→  1350→${topBat2 ? `Top bat: ${topBat2.player.name} — ${topBat2.runs}(${topBat2.balls})` : ''}
+  1351→  1351→${topBowl2 ? `Best bowl: ${topBowl2.player.name} — ${topBowl2.wickets}/${topBowl2.runs}` : ''}
+  1352→  1352→
+  1353→  1353→🏆 *Result: ${match.result}*` : ''}
+  1354→  1354→
+  1355→  1355→Scored with GullyScore 🏏`.trim();
+  1356→  1356→}
+  1357→  1357→
+  1358→  1358→
+  1359→  1359→STEP 17 — PWA Manifest (public/manifest.json)
+  1360→  1360→
+  1361→  1361→json{
+  1362→  1362→  "name": "GullyScore",
+  1363→  1363→  "short_name": "GullyScore",
+  1364→  1364→  "description": "Ball-by-ball cricket scoring for gully matches",
+  1365→  1365→  "start_url": "/",
+  1366→  1366→  "display": "standalone",
+  1367→  1367→  "background_color": "#070710",
+  1368→  1368→  "theme_color": "#070710",
+  1369→  1369→  "icons": [
+  1370→  1370→    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+  1371→  1371→    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  1372→  1372→  ]
+  1373→  1373→}
+  1374→  1374→
+  1375→  1375→
+  1376→  1376→CRITICAL IMPLEMENTATION NOTES
+  1377→  1377→
+  1378→  1378→1. Optimistic Updates on Scoring Screen
+  1379→  1379→
+  1380→  1380→The scoring screen MUST update the UI immediately (before API response). Pattern:
+  1381→  1381→
+  1382→  1382→tsxconst [optimisticRuns, setOptimisticRuns] = useState(currentRuns);
+  1383→  1383→const handleScore = async (r: number) => {
+  1384→  1384→  setOptimisticRuns(prev => prev + r); // instant UI update
+  1385→  1385→  setSubmitting(true);
+  1386→  1386→  const result = await recordBall(...);
+  1387→  1387→  mutate(); // sync with server
+  1388→  1388→  setSubmitting(false);
+  1389→  1389→};
+  1390→  1390→
+  1391→  1391→2. Never Allow Double-Tap on Score Buttons
+  1392→  1392→
+  1393→  1393→While isSubmitting is true, all scoring buttons MUST be disabled and show a loading state. Use pointer-events-none + opacity-60 + spinner on one button.
+  1394→  1394→
+  1395→  1395→3. Undo Requires Confirmation Only if Wicket
+  1396→  1396→
+  1397→  1397→If undoing would reverse a wicket (because the last ball was a wicket), show a confirmation dialog: "This will restore [player name] to the batting crease. Continue?" — otherwise undo immediately.
+  1398→  1398→
+  1399→  1399→4. Ball-by-Ball Log and Over Strip Must Be in Sync
+  1400→  1400→
+  1401→  1401→The over strip (current 6 balls) and the full ball-by-ball log both pull from the same innings.balls array. Derive current over balls by filtering: balls.filter(b => b.overNumber === innings.completedOvers).
+  1402→  1402→
+  1403→  1403→5. Tournament NRR Updates After Each Match
+  1404→  1404→
+  1405→  1405→After a match linked to a tournament completes, call updateTournamentStats(prisma, tournamentId, matchId) which recalculates all TournamentTeam stats from scratch (safer than incremental updates).
+  1406→  1406→
+  1407→  1407→6. Mobile Keyboard Avoidance on Scoring Screen
+  1408→  1408→
+  1409→  1409→The scoring screen must NEVER be pushed up by the mobile keyboard. Ensure no <input> is focusable on the main scoring view. All text inputs are inside modals only.
+  1410→  1410→
+  1411→  1411→7. Safe Area Insets
+  1412→  1412→
+  1413→  1413→Apply padding-bottom: env(safe-area-inset-bottom) to BottomNav and padding-top: env(safe-area-inset-top) to header for notched devices.
+  1414→  1414→
+  1415→  1415→8. Recalculate Endpoint Logic
+  1416→  1416→
+  1417→  1417→After editBall, call recalculate(prisma, inningsId):
+  1418→  1418→
+  1419→  1419→typescriptexport async function recalculate(prisma: PrismaClient, inningsId: string) {
+  1420→  1420→  // 1. Reset innings counters to zero
+  1421→  1421→  // 2. Reset all BatsmanInnings to zero
+  1422→  1422→  // 3. Reset all BowlerInnings to zero
+  1423→  1423→  // 4. Re-fetch all balls in order
+  1424→  1424→  // 5. Apply scoring logic for each ball sequentially (same logic as recordBall)
+  1425→  1425→  // 6. This is O(n) where n = number of balls. For 60-ball match, ~60 updates. Acceptable.
+  1426→  1426→}
+  1427→  1427→
+  1428→  1428→9. Error Handling Toast Messages
+  1429→  1429→
+  1430→  1430→Every API error MUST show a toast: "Failed to record ball — please try again". Use shadcn's useToast hook. Never silently fail.
+  1431→  1431→
+  1432→  1432→10. Initial Load Skeleton
+  1433→  1433→
+  1434→  1434→Every page must show a skeleton loader (not a spinner) while data loads via SWR. Use shadcn's <Skeleton> component. The scoring screen is exempt — it shows a full-page spinner with match name.
+  1435→  1435→
+  1436→  1436→
+  1437→  1437→STEP 18 — Build Verification Checklist
+  1438→  1438→
+  1439→  1439→Before marking the build complete, verify:
+  1440→  1440→
+  1441→  1441→Core Scoring:
+  1442→  1442→
+  1443→  1443→
+  1444→  1444→ Can start a match end-to-end (toss → opener selection → scoring)
+  1445→  1445→ 0,1,2,3,4,6 runs all record correctly with strike rotation
+  1446→  1446→ Wide: +1 run, no ball advance, wide counter increments
+  1447→  1447→ No ball: +1 run, no ball advance, NB counter increments
+  1448→  1448→ Bye: runs to extras, ball advances, striker gets balls-faced
+  1449→  1449→ Leg bye: same as bye
+  1450→  1450→ Wicket: correct dismissal info saved, new batsman prompt appears
+  1451→  1451→ Over completion: over counter advances, bowler change prompt appears
+  1452→  1452→ Undo: exactly reverses last ball, all counters restored
+  1453→  1453→ 2nd innings: target displayed, RRR calculated, win condition triggers
+  1454→  1454→
+  1455→  1455→
+  1456→  1456→Data Persistence:
+  1457→  1457→
+  1458→  1458→
+  1459→  1459→ Refresh page mid-match: all state restored correctly
+  1460→  1460→ Match history shows all completed matches
+  1461→  1461→ Player stats accumulate across multiple matches
+  1462→  1462→
+  1463→  1463→
+  1464→  1464→Tournament:
+  1465→  1465→
+  1466→  1466→
+  1467→  1467→ Create tournament → schedule generated → matches startable
+  1468→  1468→ Points table updates after each match completes
+  1469→  1469→ NRR calculated correctly
+  1470→  1470→
+  1471→  1471→
+  1472→  1472→Sharing:
+  1473→  1473→
+  1474→  1474→
+  1475→  1475→ Share scorecard produces a valid PNG
+  1476→  1476→ WhatsApp text summary copies to clipboard
+  1477→  1477→
+  1478→  1478→
+  1479→  1479→UX:
+  1480→  1480→
+  1481→  1481→
+  1482→  1482→ All buttons have adequate tap targets (≥48px)
+  1483→  1483→ Dark mode renders correctly throughout
+  1484→  1484→ Loading skeletons appear on every data fetch
+  1485→  1485→ Error toasts appear on failed API calls
+  1486→  1486→ Bottom nav hides on scoring screen
+  1487→  1487→
+  1488→  1488→
+  1489→  1489→
+  1490→  1490→FINAL NOTES FOR THE AGENT
+  1491→  1491→
+  1492→  1492→
+  1493→  1493→Implement every feature completely. No TODOs, no placeholder components, no "// implement later" comments.
+  1494→  1494→The scoring engine is the heart. Get this right before anything else. Test it manually with a 2-over match.
+  1495→  1495→Seed data is critical. The app must look full and alive on first load. Seed 3 complete matches with 60+ balls each.
+  1496→  1496→Mobile is primary. Design every component for 390px width first. Anything wider is a bonus.
+  1497→  1497→TypeScript strict. No any escapes. Every type must be defined in types/index.ts.
+  1498→  1498→Error surfaces. Every user action that calls the API must handle failure gracefully with a toast.
+  1499→  1499→Animations. Score updates, wicket flashes, 6 celebrations — these make the app feel alive. Do not skip.
+  1500→  1500→The undo feature is non-negotiable. This is GullyScore's killer feature for dispute resolution. It must work correctly every time, including for the first ball of a new over, for wicket deliveries, and for extra deliveries.
