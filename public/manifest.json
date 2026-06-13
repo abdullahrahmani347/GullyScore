@@ -1,12 +1,13 @@
 {
   "name": "GullyScore",
   "short_name": "GullyScore",
-  "description": "Ball-by-ball cricket scoring for gully matches",
+  "description": "Ball-by-ball cricket scoring for gully matches — works offline",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#070710",
   "theme_color": "#070710",
   "orientation": "portrait",
+  "scope": "/",
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -20,5 +21,7 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "categories": ["sports", "utilities"],
+  "prefer_related_applications": false
 }

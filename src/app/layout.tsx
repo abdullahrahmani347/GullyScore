@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
+import { ServiceWorkerRegistration, GlobalOfflineBanner } from "@/components/offline";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -35,11 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-bg-app text-t1 antialiased">
         <ErrorBoundary>
+          <GlobalOfflineBanner />
           <main className="min-h-dvh pb-20">
             {children}
           </main>
           <BottomNav />
           <Toaster />
+          <ServiceWorkerRegistration />
         </ErrorBoundary>
       </body>
     </html>

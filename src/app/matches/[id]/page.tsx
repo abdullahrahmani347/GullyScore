@@ -3,11 +3,13 @@
 import { Component, useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
-import { Ban, AlertTriangle, ArrowLeft, QrCode } from 'lucide-react';
+import { Ban, AlertTriangle, ArrowLeft, QrCode, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMatchStore } from '@/store/matchStore';
 import { ScoringScreen } from '@/components/scoring/ScoringScreen';
 import { LiveShareModal } from '@/components/scoring/LiveShareModal';
+import { OfflineIndicator, RecoveryScreen } from '@/components/offline';
+import { useConnectivity, useOfflineSync } from '@/hooks/useConnectivity';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -180,15 +182,41 @@ export default function ScoringPage() {
   const router = useRouter();
   const matchId = params.id as string;
 
+  const isOnline = useConnectivity();
+  const { hasPending, hasFailures, queueStats } = useOfflineSync(matchId);
+
+  // Use longer refresh interval when offline to avoid unnecessary retries
+  const refreshInterval = isOnline ? 5000 : 0;
+
   const { data: match, mutate, isLoading, error: swrError } = useSWR<MatchData>(
     `/api/matches/${matchId}`,
     fetcher,
-    { refreshInterval: 5000 }
+    {
+      refreshInterval,
+      // Don't retry when offline — we use the persisted store data instead
+      onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
+        if (!navigator.onLine) return; // Never retry offline
+        if (retryCount >= 3) return;
+        setTimeout(() => revalidate({ retryCount }), 3000);
+      },
+    }
   );
 
   const store = useMatchStore();
   const initialized = useRef(false);
   const [liveShareOpen, setLiveShareOpen] = useState(false);
+
+  // Revalidate SWR data when coming back online
+  const wasOfflineRef = useRef(false);
+  useEffect(() => {
+    if (isOnline && wasOfflineRef.current) {
+      // Back online — trigger full revalidation and sync
+      mutate();
+      wasOfflineRef.current = false;
+    } else if (!isOnline) {
+      wasOfflineRef.current = true;
+    }
+  }, [isOnline, mutate]);
 
   // Initialize store with match data (only once)
   useEffect(() => {
@@ -247,7 +275,14 @@ export default function ScoringPage() {
     }
   }, [match]);
 
-  if (isLoading) {
+  // Clear the initialized ref when the match changes (different match ID)
+  useEffect(() => {
+    return () => {
+      initialized.current = false;
+    };
+  }, [matchId]);
+
+  if (isLoading && !store.match) {
     return (
       <div className="min-h-dvh bg-bg-app flex items-center justify-center">
         <div className="text-center">
@@ -258,7 +293,7 @@ export default function ScoringPage() {
     );
   }
 
-  if (swrError || !match) {
+  if (swrError && !store.match) {
     return (
       <div className="min-h-dvh bg-bg-app flex items-center justify-center p-4">
         <div className="rounded-xl border border-border bg-bg-card p-8 text-center max-w-sm w-full">
@@ -279,17 +314,43 @@ export default function ScoringPage() {
     );
   }
 
-  const isLive =
-    match.status === 'LIVE' ||
-    match.status === 'INNINGS_BREAK' ||
-    match.status === 'UPCOMING' ||
-    match.status === 'TOSS';
+  // If offline but have persisted store data, use it (don't block on network)
+  const matchData = match || store.match;
+  if (!matchData) {
+    return (
+      <div className="min-h-dvh bg-bg-app flex items-center justify-center p-4">
+        <div className="rounded-xl border border-border bg-bg-card p-8 text-center max-w-sm w-full">
+          <WifiOff size={40} className="mx-auto mb-4 text-yellow-400" />
+          <h2 className="text-lg font-semibold text-t1 mb-2">You&apos;re offline</h2>
+          <p className="text-sm text-t3 mb-6">
+            No cached match data available. Connect to the internet to load this match.
+          </p>
+          <button
+            onClick={() => router.push('/matches')}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-border text-t2 text-sm font-medium hover:bg-white/5 transition-colors"
+          >
+            <ArrowLeft size={14} />
+            Go to Matches
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const hasLiveCode = !!match.liveCode;
+  const isLive =
+    matchData.status === 'LIVE' ||
+    matchData.status === 'INNINGS_BREAK' ||
+    matchData.status === 'UPCOMING' ||
+    matchData.status === 'TOSS';
+
+  const hasLiveCode = !!matchData.liveCode;
 
   return (
     <ScoringErrorBoundary fallback={(error, reset) => <ErrorFallback error={error} onReset={reset} />}>
       <div className="min-h-dvh bg-bg-app flex flex-col">
+        {/* Offline indicator bar */}
+        <OfflineIndicator matchId={matchId} />
+
         {/* Top bar with QR share + abandon button for live matches */}
         {isLive && (
           <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-bg-card/50">
@@ -312,6 +373,9 @@ export default function ScoringPage() {
         <div className="flex-1 flex flex-col">
           <ScoringScreen matchId={matchId} mutate={mutate} />
         </div>
+
+        {/* Recovery screen for permanently failed sync items */}
+        <RecoveryScreen matchId={matchId} />
       </div>
 
       {/* Live Share Modal */}
@@ -319,7 +383,7 @@ export default function ScoringPage() {
         <LiveShareModal
           open={liveShareOpen}
           onOpenChange={setLiveShareOpen}
-          match={match}
+          match={matchData}
         />
       )}
     </ScoringErrorBoundary>
