@@ -35,6 +35,8 @@ model Player {
   bowlingPerf    BowlerInnings[]
   ballsAsBatsman Ball[]           @relation("BallBatsman")
   ballsAsBowler  Ball[]           @relation("BallBowler")
+  partnerships1  Partnership[]    @relation("PartnershipBatsman1")
+  partnerships2  Partnership[]    @relation("PartnershipBatsman2")
 }
 
 model Match {
@@ -94,11 +96,29 @@ model Innings {
   currentBowlerId String?
   isCompleted    Boolean @default(false)
 
-  match      Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  team       Team           @relation(fields: [teamId], references: [id])
-  balls      Ball[]
-  batting    BatsmanInnings[]
-  bowling    BowlerInnings[]
+  match         Match          @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team          Team           @relation(fields: [teamId], references: [id])
+  balls         Ball[]
+  batting       BatsmanInnings[]
+  bowling       BowlerInnings[]
+  partnerships  Partnership[]
+}
+
+model Partnership {
+  id            String @id @default(cuid())
+  inningsId     String
+  batsman1Id    String
+  batsman2Id    String
+  runs          Int    @default(0)
+  balls         Int    @default(0)
+  wicketNumber  Int    @default(0)
+  openingBallId String?
+  closingBallId String?
+  isOpen        Boolean @default(true)
+
+  innings  Innings @relation(fields: [inningsId], references: [id], onDelete: Cascade)
+  batsman1 Player  @relation("PartnershipBatsman1", fields: [batsman1Id], references: [id])
+  batsman2 Player  @relation("PartnershipBatsman2", fields: [batsman2Id], references: [id])
 }
 
 model Ball {

@@ -7,6 +7,7 @@ import { BattingTable } from './BattingTable';
 import { BowlingTable } from './BowlingTable';
 import { FallOfWickets } from './FallOfWickets';
 import { BallByBallLog } from './BallByBallLog';
+import { PartnershipsTable } from './PartnershipsTable';
 import { exportScorecardImage, generateWhatsAppSummary } from '@/lib/share';
 import { toast } from 'sonner';
 import { formatOvers } from '@/lib/scoring-utils';
@@ -218,6 +219,9 @@ function ScorecardView({ match }: ScorecardViewProps) {
             battingTeamPlayers={activeInnings.team?.players || []}
           />
 
+          {/* Partnerships */}
+          <PartnershipsTable partnerships={activeInnings.partnerships || []} />
+
           {/* Ball by ball toggle */}
           <button
             onClick={() => setShowBallByBall(!showBallByBall)}
@@ -249,6 +253,7 @@ function ScorecardView({ match }: ScorecardViewProps) {
             allPlayers={allPlayers}
             battingTeamPlayers={inn1.team?.players || []}
           />
+          <PartnershipsTable partnerships={inn1.partnerships || []} />
           <button
             onClick={() => setShowBallByBall(!showBallByBall)}
             className="w-full text-xs text-t3 hover:text-t2 transition-colors py-2"

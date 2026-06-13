@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { rebuildPartnerships } from './partnerships';
 
 export async function recalculate(inningsId: string): Promise<void> {
   const innings = await db.innings.findUniqueOrThrow({
@@ -134,4 +135,7 @@ export async function recalculate(inningsId: string): Promise<void> {
       },
     });
   }
+
+  // Rebuild partnerships from the ball log
+  await rebuildPartnerships(inningsId);
 }

@@ -44,6 +44,14 @@ export function generateWhatsAppSummary(match: MatchData): string {
   const topBat2 = inn2 ? [...inn2.batting].sort((a, b) => b.runs - a.runs)[0] : null;
   const topBowl2 = inn2 ? [...inn2.bowling].sort((a, b) => b.wickets - a.wickets)[0] : null;
 
+  // Best partnership for each innings
+  const bestPartnership1 = (inn1 as any)?.partnerships?.length > 0
+    ? [...(inn1 as any).partnerships].sort((a: any, b: any) => b.runs - a.runs)[0]
+    : null;
+  const bestPartnership2 = inn2 && (inn2 as any)?.partnerships?.length > 0
+    ? [...(inn2 as any).partnerships].sort((a: any, b: any) => b.runs - a.runs)[0]
+    : null;
+
   return `🏏 *GullyScore Match Report*
 📅 ${date}${match.venue ? ` | ${match.venue}` : ''}
 
@@ -53,11 +61,13 @@ export function generateWhatsAppSummary(match: MatchData): string {
 Score: *${inn1.runs}/${inn1.wickets}* (${inn1.completedOvers}.${inn1.currentBalls} ov)
 ${topBat1 ? `Top bat: ${topBat1.player?.name} — ${topBat1.runs}(${topBat1.balls})` : ''}
 ${topBowl1 ? `Best bowl: ${topBowl1.player?.name} — ${topBowl1.wickets}/${topBowl1.runs}` : ''}
+${bestPartnership1 ? `Best stand: ${bestPartnership1.batsman1?.name} & ${bestPartnership1.batsman2?.name} — ${bestPartnership1.runs}(${bestPartnership1.balls})` : ''}
 
 ${inn2 ? `🏏 2nd Innings: ${inn2.team?.name || 'N/A'}
 Score: *${inn2.runs}/${inn2.wickets}* (${inn2.completedOvers}.${inn2.currentBalls} ov)
 ${topBat2 ? `Top bat: ${topBat2.player?.name} — ${topBat2.runs}(${topBat2.balls})` : ''}
 ${topBowl2 ? `Best bowl: ${topBowl2.player?.name} — ${topBowl2.wickets}/${topBowl2.runs}` : ''}
+${bestPartnership2 ? `Best stand: ${bestPartnership2.batsman1?.name} & ${bestPartnership2.batsman2?.name} — ${bestPartnership2.runs}(${bestPartnership2.balls})` : ''}
 
 🏆 *Result: ${match.result}*` : ''}
 

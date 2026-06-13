@@ -163,6 +163,16 @@ export interface RecordBallResponse {
   isMatchComplete: boolean;
 }
 
+export interface PartnershipData {
+  id: string;
+  batsman1: Player;
+  batsman2: Player;
+  runs: number;
+  balls: number;
+  wicketNumber: number;
+  isOpen: boolean;
+}
+
 export interface TournamentTeamStat {
   teamId: string;
   team: Team;

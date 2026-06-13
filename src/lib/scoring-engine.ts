@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import type { RecordBallInput, RecordBallResponse } from '@/types';
 import { calculateCRR, calculateRRR } from './scoring-utils';
+import { updatePartnershipOnBall, rebuildPartnerships } from './partnerships';
 
 export async function recordBall(
   inningsId: string,
@@ -229,6 +230,19 @@ export async function recordBall(
     (newCompletedOvers >= match.totalOvers && newCurrentBalls === 0) ||
     (innings.inningsNumber === 2 && innings.target != null && newRuns >= innings.target);
 
+  // 8. Update partnership tracking
+  await updatePartnershipOnBall(inningsId, {
+    ballId: ball.id,
+    strikerIdBefore: innings.strikerId!,
+    nonStrikerIdBefore: innings.nonStrikerId!,
+    runs: totalRuns,
+    isLegalDelivery,
+    isWicket,
+    newStrikerId,
+    newNonStrikerId,
+    isInningsComplete,
+  });
+
   const ballsRemaining = innings.inningsNumber === 2 && innings.target != null
     ? (match.totalOvers * 6) - (newCompletedOvers * 6 + newCurrentBalls)
     : null;
@@ -335,6 +349,9 @@ export async function undoLastBall(inningsId: string): Promise<{ success: boolea
 
   // Delete Ball record
   await db.ball.delete({ where: { id: lastBall.id } });
+
+  // Rebuild partnerships from scratch after undo
+  await rebuildPartnerships(inningsId);
 
   return { success: true };
 }

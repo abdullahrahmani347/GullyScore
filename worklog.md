@@ -1,30 +1,37 @@
 ---
-Task ID: 1
+Task ID: 2
 Agent: Main Agent
-Task: Implement Offline-First Architecture for GullyScore
+Task: Implement Partnership Tracking for GullyScore
 
 Work Log:
-- Explored existing codebase structure, understood scoring flow and API endpoints
-- Installed dexie@4.4.3 for IndexedDB offline queue
-- Created IndexedDB database module (src/lib/offline/db.ts) with OfflineQueueItem and SyncEvent tables, queue operations (enqueue, getPending, markSyncing, markSynced, markFailed, retryFailed, dismissFailed)
-- Created sync engine (src/lib/offline/sync-engine.ts) with ordered queue processing, retry logic (max 5 retries), and event subscription system
-- Created offline-aware fetch utility (src/lib/offline/fetch.ts) with offlineFetch() that queues mutations when offline and returns synthetic success responses
-- Created convenience methods: recordBallOffline, undoBallOffline, setStrikerOffline, setBowlerOffline, completeInningsOffline, completeMatchOffline, createInningsOffline
-- Created Service Worker (public/sw.js) with CacheFirst for static assets, NetworkFirst with cache fallback for API GETs, NetworkOnly for SSE streams
-- Created SW registration utility (src/lib/offline/sw-register.ts) with update detection and applyUpdate()
-- Created connectivity hooks (src/hooks/useConnectivity.ts) with useConnectivity, useOfflineSync, useUnsyncedBalls
-- Modified matchStore (src/store/matchStore.ts) to use zustand persist middleware for offline state persistence
-- Modified scoring handlers (src/hooks/useScoringHandlers.ts) to use offline-aware fetch for all mutations
-- Created UI components: OfflineIndicator, OfflineBadge, RecoveryScreen, GlobalOfflineBanner, ServiceWorkerRegistration
-- Wired everything into root layout (GlobalOfflineBanner + ServiceWorkerRegistration) and scoring page (OfflineIndicator + RecoveryScreen)
-- Updated scoring page to: disable SWR polling when offline, use persisted store data when offline, revalidate on reconnect, custom onErrorRetry for SWR
-- Updated manifest.json with improved PWA metadata
+- Added Partnership model to Prisma schema with fields: inningsId, batsman1Id, batsman2Id, runs, balls, wicketNumber, openingBallId, closingBallId, isOpen
+- Added reverse relations on Player model (partnerships1, partnerships2)
+- Ran prisma db push to update database schema
+- Created partnership computation engine (src/lib/partnerships.ts) with two modes:
+  - updatePartnershipOnBall: Incremental updates during live scoring
+  - rebuildPartnerships: Full rebuild from Ball log (for undo, recalculate, migration)
+- Updated scoring-engine.ts to call updatePartnershipOnBall after each ball recording
+- Updated scoring-engine.ts undoLastBall to rebuild partnerships after undo
+- Updated recalculate.ts to rebuild partnerships after recalculation
+- Added PartnershipData type to types/index.ts
+- Updated scorecard API endpoint to include partnerships with batsman names
+- Created PartnershipsTable component with:
+  - Sorted display (closed by wicket number desc, open last)
+  - Top stand highlighted with accent border
+  - 50+ and 100 partnership badges
+  - Current partnership shown with green dot indicator
+  - Ball count display
+- Wired PartnershipsTable into ScorecardView (both single and dual innings views)
+- Updated WhatsApp share summary to include best partnership info
+- Created migration script (src/lib/migrate-partnerships.ts) for existing match data
+- End-to-end tested with Node.js: verified 3 balls → partnership tracking → wicket closes partnership → new batsman opens new partnership
+- Tested undo: partnerships correctly updated after undoing last ball
+- Tested rebuild: produces identical results to incremental tracking
 
 Stage Summary:
-- Complete offline-first architecture implemented
-- All scoring mutations (ball recording, wickets, undo, striker/bowler changes, innings/match completion) are queued in IndexedDB when offline
-- Service Worker caches static assets and API GET responses
-- Zustand matchStore is now persisted to localStorage
-- Recovery screen for permanently failed sync items (5 retries max)
-- Auto-sync triggers when connectivity is restored
-- Build passes cleanly, dev server verified working
+- Complete partnership tracking implemented with zero additional scorer input
+- Partnerships computed entirely from Ball log data
+- Surfaces on scorecard: "PARTNERSHIPS" section with runs/balls/wicket info
+- Best partnership highlighted, 50+/100 badges
+- WhatsApp summary includes best stand info
+- Build passes cleanly, all tests pass

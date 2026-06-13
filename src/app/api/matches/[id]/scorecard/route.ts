@@ -18,6 +18,13 @@ export async function GET(
             batting: { include: { player: true }, orderBy: { battingOrder: 'asc' } },
             bowling: { include: { player: true } },
             balls: { orderBy: { deliveryNumber: 'asc' } },
+            partnerships: {
+              include: {
+                batsman1: true,
+                batsman2: true,
+              },
+              orderBy: { wicketNumber: 'desc' },
+            },
           },
           orderBy: { inningsNumber: 'asc' },
         },
@@ -92,6 +99,15 @@ export async function GET(
           legByes: inn.legByes,
           total: inn.wideBalls + inn.noBalls + inn.byes + inn.legByes,
         },
+        partnerships: inn.partnerships.map((p) => ({
+          id: p.id,
+          batsman1: p.batsman1,
+          batsman2: p.batsman2,
+          runs: p.runs,
+          balls: p.balls,
+          wicketNumber: p.wicketNumber,
+          isOpen: p.isOpen,
+        })),
       })),
     };
 
