@@ -35,3 +35,29 @@ Stage Summary:
 - Best partnership highlighted, 50+/100 badges
 - WhatsApp summary includes best stand info
 - Build passes cleanly, all tests pass
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix app loading/crash issue — Dexie IndexedDB evaluated on server
+
+Work Log:
+- Diagnosed root cause: Dexie `offlineDB = new GullyScoreDB()` at top level of db.ts caused IndexedDB API access on server during SSR
+- The import chain: layout.tsx → offline/index.ts (no 'use client') → db.ts → Dexie → crash
+- Node.js v24.x crashes the entire process with unhandled MissingAPIError from Dexie
+- Fixed db.ts: Replaced `export const offlineDB = new GullyScoreDB()` with lazy `getOfflineDB()` singleton with `typeof window` guard
+- Fixed offline/index.ts: Added `'use client'` directive to barrel file
+- Fixed sync-engine.ts: Replaced `export const syncEngine = new SyncEngine()` with `getSyncEngine()` lazy singleton, converted all db.ts imports to dynamic `await import()`
+- Fixed fetch.ts: Converted `enqueueRequest` import to dynamic `await import()`, kept `import type` for type-only imports
+- Fixed useConnectivity.ts: All db.ts and sync-engine imports converted to dynamic imports inside callbacks with try/catch
+- Fixed ServiceWorkerRegistration.tsx: Changed `syncEngine` → `getSyncEngine()` 
+- Fixed GlobalOfflineBanner.tsx: Changed `syncEngine` → `getSyncEngine()`
+- Verified build passes cleanly
+- Tested all pages: /, /matches, /teams, /tournaments, /matches/new, /matches/[id] all render correctly
+- Tested all APIs: /api/teams, /api/matches, POST endpoints all work
+
+Stage Summary:
+- Root cause: Dexie IndexedDB was being instantiated at module-evaluation time on the server
+- Fix: Lazy singleton pattern for browser-only singletons + 'use client' on barrel files + dynamic imports for server-unsafe code
+- All pages now load without crashing the process
+- Build passes, dev server works correctly

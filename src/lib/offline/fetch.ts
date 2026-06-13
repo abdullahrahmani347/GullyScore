@@ -6,9 +6,12 @@
  * success response, and the request is replayed when connectivity returns.
  *
  * This is the critical divergence from normal fetch: the scorer never loses a ball.
+ * 
+ * NOTE: This module is client-only. All functions include guards to prevent
+ * execution on the server where IndexedDB is unavailable.
  */
 
-import { enqueueRequest, type OfflineQueueItem } from './db';
+import type { OfflineQueueItem } from './db';
 
 /** Check if the browser is currently offline */
 export function isOffline(): boolean {
@@ -95,10 +98,13 @@ export async function offlineFetch<T = any>(
     }
   }
 
-  // Offline path: queue the mutation
+  // Offline path: queue the mutation (client-only)
   if (!isOnline() && isMutation && queueIfOffline) {
     const body = typeof fetchOptions.body === 'string' ? fetchOptions.body : JSON.stringify(fetchOptions.body);
 
+    // Dynamic import to avoid evaluating db.ts on the server
+    const { enqueueRequest } = await import('./db');
+    
     const queuedItemId = await enqueueRequest({
       url,
       method,

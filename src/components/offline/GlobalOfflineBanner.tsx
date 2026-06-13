@@ -2,7 +2,7 @@
 
 import { WifiOff, RefreshCw } from 'lucide-react';
 import { useConnectivity, useOfflineSync } from '@/hooks/useConnectivity';
-import { syncEngine } from '@/lib/offline/sync-engine';
+import { getSyncEngine } from '@/lib/offline/sync-engine';
 import { useEffect } from 'react';
 
 /**
@@ -16,7 +16,7 @@ export function GlobalOfflineBanner() {
   // When coming back online, auto-trigger sync
   useEffect(() => {
     if (isOnline && queueStats.total > 0) {
-      syncEngine.syncAll();
+      getSyncEngine().syncAll().catch(() => {});
     }
   }, [isOnline, queueStats.total]);
 

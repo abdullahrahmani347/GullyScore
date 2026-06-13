@@ -52,6 +52,10 @@ export interface SyncEvent {
  * Tables:
  * - offlineQueue: Pending/syncing/failed API requests
  * - syncEvents: Log of sync operations for UI display
+ * 
+ * NOTE: This class MUST only be instantiated on the client (browser).
+ * IndexedDB does not exist in Node.js, so we use a lazy singleton
+ * that only creates the instance when actually needed on the client.
  */
 class GullyScoreDB extends Dexie {
   offlineQueue!: EntityTable<OfflineQueueItem, 'id'>;
@@ -67,8 +71,23 @@ class GullyScoreDB extends Dexie {
   }
 }
 
-/** Singleton database instance */
-export const offlineDB = new GullyScoreDB();
+/** Lazy singleton — only instantiated on first access from the client */
+let _offlineDB: GullyScoreDB | null = null;
+
+/**
+ * Get the offline database instance (client-only).
+ * Uses a lazy singleton pattern to avoid instantiating Dexie
+ * on the server where IndexedDB is unavailable.
+ */
+export function getOfflineDB(): GullyScoreDB {
+  if (typeof window === 'undefined') {
+    throw new Error('[GullyScore] Cannot access offline database on the server');
+  }
+  if (!_offlineDB) {
+    _offlineDB = new GullyScoreDB();
+  }
+  return _offlineDB;
+}
 
 // ─── Queue Operations ────────────────────────────────────────────
 
@@ -77,7 +96,8 @@ export const offlineDB = new GullyScoreDB();
  * Returns the queue item ID for tracking.
  */
 export async function enqueueRequest(item: Omit<OfflineQueueItem, 'id' | 'retryCount' | 'status'>): Promise<number> {
-  const id = await offlineDB.offlineQueue.add({
+  const db = getOfflineDB();
+  const id = await db.offlineQueue.add({
     ...item,
     status: 'pending',
     retryCount: 0,
@@ -93,15 +113,16 @@ export async function enqueueRequest(item: Omit<OfflineQueueItem, 'id' | 'retryC
  * This ensures balls sync in the exact order they were recorded.
  */
 export async function getPendingItems(matchId?: string): Promise<OfflineQueueItem[]> {
+  const db = getOfflineDB();
   if (matchId) {
-    return offlineDB.offlineQueue
+    return db.offlineQueue
       .where('matchId')
       .equals(matchId)
       .and(item => item.status === 'pending' || item.status === 'failed')
       .sortBy('timestamp');
   }
   
-  return offlineDB.offlineQueue
+  return db.offlineQueue
     .where('status')
     .anyOf(['pending', 'failed'])
     .sortBy('timestamp');
@@ -111,15 +132,16 @@ export async function getPendingItems(matchId?: string): Promise<OfflineQueueIte
  * Get all items that have permanently failed (for recovery screen).
  */
 export async function getPermanentlyFailedItems(matchId?: string): Promise<OfflineQueueItem[]> {
+  const db = getOfflineDB();
   if (matchId) {
-    return offlineDB.offlineQueue
+    return db.offlineQueue
       .where('matchId')
       .equals(matchId)
       .and(item => item.status === 'permanently_failed')
       .sortBy('timestamp');
   }
   
-  return offlineDB.offlineQueue
+  return db.offlineQueue
     .where('status')
     .equals('permanently_failed')
     .sortBy('timestamp');
@@ -135,9 +157,10 @@ export async function getQueueStats(matchId?: string): Promise<{
   permanentlyFailed: number;
   total: number;
 }> {
+  const db = getOfflineDB();
   const items = matchId
-    ? await offlineDB.offlineQueue.where('matchId').equals(matchId).toArray()
-    : await offlineDB.offlineQueue.toArray();
+    ? await db.offlineQueue.where('matchId').equals(matchId).toArray()
+    : await db.offlineQueue.toArray();
 
   return {
     pending: items.filter(i => i.status === 'pending').length,
@@ -152,7 +175,8 @@ export async function getQueueStats(matchId?: string): Promise<{
  * Mark a queue item as syncing (in progress).
  */
 export async function markSyncing(id: number): Promise<void> {
-  await offlineDB.offlineQueue.update(id, {
+  const db = getOfflineDB();
+  await db.offlineQueue.update(id, {
     status: 'syncing',
     lastRetryAt: Date.now(),
   });
@@ -162,21 +186,23 @@ export async function markSyncing(id: number): Promise<void> {
  * Mark a queue item as successfully synced and remove it.
  */
 export async function markSynced(id: number): Promise<void> {
-  await offlineDB.offlineQueue.delete(id);
+  const db = getOfflineDB();
+  await db.offlineQueue.delete(id);
 }
 
 /**
  * Mark a queue item as failed (will be retried).
  */
 export async function markFailed(id: number, error: string): Promise<void> {
-  const item = await offlineDB.offlineQueue.get(id);
+  const db = getOfflineDB();
+  const item = await db.offlineQueue.get(id);
   if (!item) return;
 
   const newRetryCount = item.retryCount + 1;
   const maxRetries = 5;
 
   if (newRetryCount >= maxRetries) {
-    await offlineDB.offlineQueue.update(id, {
+    await db.offlineQueue.update(id, {
       status: 'permanently_failed',
       retryCount: newRetryCount,
       lastError: error,
@@ -184,7 +210,7 @@ export async function markFailed(id: number, error: string): Promise<void> {
     });
     await logSyncEvent('queue_item_failed', `Item ${id} permanently failed after ${maxRetries} retries: ${error}`, id);
   } else {
-    await offlineDB.offlineQueue.update(id, {
+    await db.offlineQueue.update(id, {
       status: 'failed',
       retryCount: newRetryCount,
       lastError: error,
@@ -197,14 +223,16 @@ export async function markFailed(id: number, error: string): Promise<void> {
  * Remove a permanently failed item (user dismissed it on recovery screen).
  */
 export async function dismissFailedItem(id: number): Promise<void> {
-  await offlineDB.offlineQueue.delete(id);
+  const db = getOfflineDB();
+  await db.offlineQueue.delete(id);
 }
 
 /**
  * Retry a permanently failed item by resetting its status to pending.
  */
 export async function retryFailedItem(id: number): Promise<void> {
-  await offlineDB.offlineQueue.update(id, {
+  const db = getOfflineDB();
+  await db.offlineQueue.update(id, {
     status: 'pending',
     retryCount: 0,
     lastError: undefined,
@@ -215,7 +243,8 @@ export async function retryFailedItem(id: number): Promise<void> {
  * Clear all queue items for a match (e.g., when match is completed).
  */
 export async function clearMatchQueue(matchId: string): Promise<void> {
-  await offlineDB.offlineQueue
+  const db = getOfflineDB();
+  await db.offlineQueue
     .where('matchId')
     .equals(matchId)
     .delete();
@@ -231,7 +260,8 @@ export async function logSyncEvent(
   message: string,
   queueItemId?: number
 ): Promise<void> {
-  await offlineDB.syncEvents.add({
+  const db = getOfflineDB();
+  await db.syncEvents.add({
     timestamp: Date.now(),
     type,
     message,
@@ -239,11 +269,11 @@ export async function logSyncEvent(
   });
 
   // Keep only the last 50 sync events
-  const count = await offlineDB.syncEvents.count();
+  const count = await db.syncEvents.count();
   if (count > 50) {
-    const oldest = await offlineDB.syncEvents.orderBy('id').limit(count - 50).toArray();
+    const oldest = await db.syncEvents.orderBy('id').limit(count - 50).toArray();
     const ids = oldest.map(e => e.id!);
-    await offlineDB.syncEvents.bulkDelete(ids);
+    await db.syncEvents.bulkDelete(ids);
   }
 }
 
@@ -251,7 +281,8 @@ export async function logSyncEvent(
  * Get recent sync events.
  */
 export async function getRecentSyncEvents(limit = 10): Promise<SyncEvent[]> {
-  return offlineDB.syncEvents
+  const db = getOfflineDB();
+  return db.syncEvents
     .orderBy('id')
     .reverse()
     .limit(limit)

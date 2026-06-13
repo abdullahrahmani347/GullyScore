@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { registerServiceWorker, onSWStateChange, applyUpdate, type SWRegistrationState } from '@/lib/offline/sw-register';
-import { syncEngine } from '@/lib/offline/sync-engine';
+import { getSyncEngine } from '@/lib/offline/sync-engine';
 import { RefreshCw, Download } from 'lucide-react';
 
 /**
@@ -25,9 +25,14 @@ export function ServiceWorkerRegistration() {
     const unsubscribe = onSWStateChange(setSwState);
 
     // When coming online, trigger sync of offline queue
-    const handleOnline = () => {
+    const handleOnline = async () => {
       console.log('[GullyScore] Back online — syncing offline queue');
-      syncEngine.syncAll();
+      try {
+        const engine = getSyncEngine();
+        await engine.syncAll();
+      } catch {
+        // Sync engine not available (shouldn't happen client-side)
+      }
     };
 
     window.addEventListener('online', handleOnline);

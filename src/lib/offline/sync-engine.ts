@@ -6,17 +6,12 @@
  * - Exponential backoff on retries (1s, 2s, 4s, 8s, then permanent failure)
  * - Emits events for UI updates
  * - Handles the case where a scorer goes offline for 3+ overs
+ * 
+ * NOTE: This module is client-only. It uses dynamic imports for db.ts
+ * to prevent Dexie/IndexedDB from being evaluated on the server.
  */
 
-import {
-  offlineDB,
-  getPendingItems,
-  markSyncing,
-  markSynced,
-  markFailed,
-  logSyncEvent,
-  type OfflineQueueItem,
-} from './db';
+import type { OfflineQueueItem } from './db';
 
 export type SyncEngineEventType = 'sync_start' | 'sync_progress' | 'sync_complete' | 'sync_error' | 'item_failed';
 
@@ -62,8 +57,16 @@ class SyncEngine {
       return { processed: 0, failed: 0 };
     }
 
+    // Guard: don't run on server
+    if (typeof window === 'undefined') {
+      return { processed: 0, failed: 0 };
+    }
+
     this.isSyncing = true;
     this.abortController = new AbortController();
+
+    // Dynamic import to avoid evaluating db.ts on the server
+    const { getPendingItems, logSyncEvent } = await import('./db');
 
     const items = await getPendingItems(matchId);
     let processed = 0;
@@ -113,6 +116,9 @@ class SyncEngine {
   private async syncItem(item: OfflineQueueItem): Promise<boolean> {
     if (!item.id) return false;
 
+    // Dynamic import to avoid evaluating db.ts on the server
+    const { getOfflineDB, markSyncing, markSynced, markFailed, logSyncEvent } = await import('./db');
+
     await markSyncing(item.id);
 
     try {
@@ -147,7 +153,8 @@ class SyncEngine {
       // Don't retry 4xx errors (except 408, 429)
       if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
         // Client error — permanent failure
-        await offlineDB.offlineQueue.update(item.id, {
+        const db = getOfflineDB();
+        await db.offlineQueue.update(item.id, {
           status: 'permanently_failed',
           retryCount: item.retryCount + 1,
           lastError: errorMsg,
@@ -185,5 +192,20 @@ class SyncEngine {
   }
 }
 
-/** Singleton sync engine instance */
-export const syncEngine = new SyncEngine();
+/** Lazy singleton — only instantiated on first access from the client */
+let _syncEngine: SyncEngine | null = null;
+
+/**
+ * Get the sync engine instance (client-only).
+ * Uses a lazy singleton pattern to avoid importing browser-only
+ * dependencies on the server.
+ */
+export function getSyncEngine(): SyncEngine {
+  if (typeof window === 'undefined') {
+    throw new Error('[GullyScore] Cannot access sync engine on the server');
+  }
+  if (!_syncEngine) {
+    _syncEngine = new SyncEngine();
+  }
+  return _syncEngine;
+}

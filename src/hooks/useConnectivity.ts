@@ -1,14 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { syncEngine, type SyncEngineEvent } from '@/lib/offline/sync-engine';
-import {
-  getQueueStats,
-  getPendingItems,
-  getPermanentlyFailedItems,
-  hasPendingItems,
-  type OfflineQueueItem,
-} from '@/lib/offline/db';
+import type { SyncEngineEvent } from '@/lib/offline/sync-engine';
+import type { OfflineQueueItem } from '@/lib/offline/db';
 
 /**
  * Hook to track online/offline state.
@@ -38,6 +32,8 @@ export function useConnectivity() {
 /**
  * Hook to track sync status and queue state.
  * Provides real-time updates about the offline queue.
+ * 
+ * Uses dynamic imports to avoid evaluating IndexedDB/Dexie on the server.
  */
 export function useOfflineSync(matchId?: string) {
   const [queueStats, setQueueStats] = useState({
@@ -53,30 +49,47 @@ export function useOfflineSync(matchId?: string) {
   const refreshRef = useRef<() => void>();
 
   const refresh = useCallback(async () => {
-    const stats = await getQueueStats(matchId);
-    setQueueStats(stats);
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const { getQueueStats, getPermanentlyFailedItems } = await import('@/lib/offline/db');
+      const stats = await getQueueStats(matchId);
+      setQueueStats(stats);
 
-    if (matchId) {
-      const items = await getPermanentlyFailedItems(matchId);
-      setFailedItems(items);
+      if (matchId) {
+        const items = await getPermanentlyFailedItems(matchId);
+        setFailedItems(items);
+      }
+    } catch (error) {
+      // Silently handle — might be server-side
+      console.warn('[GullyScore] Failed to refresh queue stats:', error);
     }
   }, [matchId]);
 
   refreshRef.current = refresh;
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     // Initial load
     refreshRef.current?.();
 
     // Subscribe to sync engine events
-    const unsubscribe = syncEngine.subscribe((event) => {
-      setLastSyncEvent(event);
-      setIsSyncing(event.type === 'sync_start' || event.type === 'sync_progress');
+    let unsubscribe: (() => void) | undefined;
 
-      // Refresh queue stats after any sync event
-      if (event.type === 'sync_complete' || event.type === 'sync_error' || event.type === 'item_failed') {
-        refreshRef.current?.();
-      }
+    import('@/lib/offline/sync-engine').then(({ getSyncEngine }) => {
+      const engine = getSyncEngine();
+      unsubscribe = engine.subscribe((event) => {
+        setLastSyncEvent(event);
+        setIsSyncing(event.type === 'sync_start' || event.type === 'sync_progress');
+
+        // Refresh queue stats after any sync event
+        if (event.type === 'sync_complete' || event.type === 'sync_error' || event.type === 'item_failed') {
+          refreshRef.current?.();
+        }
+      });
+    }).catch(() => {
+      // Server-side guard — ignore
     });
 
     // Poll queue stats periodically
@@ -85,7 +98,7 @@ export function useOfflineSync(matchId?: string) {
     }, 5000);
 
     return () => {
-      unsubscribe();
+      unsubscribe?.();
       clearInterval(interval);
     };
   }, []);
@@ -94,8 +107,10 @@ export function useOfflineSync(matchId?: string) {
    * Trigger a manual sync of the offline queue.
    */
   const triggerSync = useCallback(async () => {
-    if (!navigator.onLine) return;
-    await syncEngine.syncAll(matchId);
+    if (typeof window === 'undefined' || !navigator.onLine) return;
+    const { getSyncEngine } = await import('@/lib/offline/sync-engine');
+    const engine = getSyncEngine();
+    await engine.syncAll(matchId);
     await refresh();
   }, [matchId, refresh]);
 
@@ -116,8 +131,10 @@ export function useOfflineSync(matchId?: string) {
     await retryFailedItem(id);
     await refresh();
     // Auto-trigger sync after retrying
-    if (navigator.onLine) {
-      await syncEngine.syncAll(matchId);
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      const { getSyncEngine } = await import('@/lib/offline/sync-engine');
+      const engine = getSyncEngine();
+      await engine.syncAll(matchId);
       await refresh();
     }
   }, [matchId, refresh]);
@@ -144,11 +161,16 @@ export function useUnsyncedBalls(matchId?: string) {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    if (!matchId) return;
+    if (!matchId || typeof window === 'undefined') return;
 
     const check = async () => {
-      const items = await getPendingItems(matchId);
-      setCount(items.filter(i => i.type === 'ball' || i.type === 'wicket').length);
+      try {
+        const { getPendingItems } = await import('@/lib/offline/db');
+        const items = await getPendingItems(matchId);
+        setCount(items.filter(i => i.type === 'ball' || i.type === 'wicket').length);
+      } catch {
+        // Silently handle
+      }
     };
 
     check();
