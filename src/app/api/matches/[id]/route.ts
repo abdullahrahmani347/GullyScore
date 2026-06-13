@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { generateLiveCode, emitLiveEvent } from '@/lib/live-emitter';
 
 export async function GET(
   request: NextRequest,
@@ -67,7 +68,33 @@ export async function PATCH(
           },
         },
       });
+
+      // Emit abandon event for SSE
+      emitLiveEvent(id, {
+        type: 'match_abandoned',
+        data: { result: updatedMatch.result },
+      });
+
       return NextResponse.json(updatedMatch);
+    }
+
+    // If match is going LIVE, generate a live code if it doesn't have one
+    let liveCode: string | undefined;
+    if (status === 'LIVE') {
+      const existingMatch = await db.match.findUnique({ where: { id } });
+      if (existingMatch && !existingMatch.liveCode) {
+        // Generate unique code (retry if collision)
+        let attempts = 0;
+        while (attempts < 10) {
+          const code = generateLiveCode();
+          const existing = await db.match.findUnique({ where: { liveCode: code } });
+          if (!existing) {
+            liveCode = code;
+            break;
+          }
+          attempts++;
+        }
+      }
     }
 
     const match = await db.match.update({
@@ -79,6 +106,7 @@ export async function PATCH(
         ...(currentInnings !== undefined && { currentInnings }),
         ...(result !== undefined && { result }),
         ...(winnerId !== undefined && { winnerId }),
+        ...(liveCode && { liveCode }),
       },
       include: {
         team1: { include: { players: true } },
@@ -94,6 +122,14 @@ export async function PATCH(
         },
       },
     });
+
+    // Emit status change event
+    if (status) {
+      emitLiveEvent(id, {
+        type: 'status_change',
+        data: { status, liveCode: match.liveCode },
+      });
+    }
 
     return NextResponse.json(match);
   } catch (error) {

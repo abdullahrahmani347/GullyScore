@@ -3,10 +3,11 @@
 import { Component, useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
-import { Ban, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Ban, AlertTriangle, ArrowLeft, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { useMatchStore } from '@/store/matchStore';
 import { ScoringScreen } from '@/components/scoring/ScoringScreen';
+import { LiveShareModal } from '@/components/scoring/LiveShareModal';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -187,6 +188,7 @@ export default function ScoringPage() {
 
   const store = useMatchStore();
   const initialized = useRef(false);
+  const [liveShareOpen, setLiveShareOpen] = useState(false);
 
   // Initialize store with match data (only once)
   useEffect(() => {
@@ -283,20 +285,43 @@ export default function ScoringPage() {
     match.status === 'UPCOMING' ||
     match.status === 'TOSS';
 
+  const hasLiveCode = !!match.liveCode;
+
   return (
     <ScoringErrorBoundary fallback={(error, reset) => <ErrorFallback error={error} onReset={reset} />}>
       <div className="min-h-dvh bg-bg-app flex flex-col">
-        {/* Top bar with abandon button for live matches */}
+        {/* Top bar with QR share + abandon button for live matches */}
         {isLive && (
           <div className="flex items-center justify-between px-3 py-2 border-b border-border bg-bg-card/50">
             <span className="text-xs text-t3">Match in progress</span>
-            <AbandonMatchButton matchId={matchId} />
+            <div className="flex items-center gap-1">
+              {/* QR Code / Live Share button */}
+              {hasLiveCode && (
+                <button
+                  onClick={() => setLiveShareOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-accent hover:bg-accent/10 transition-colors"
+                >
+                  <QrCode size={14} />
+                  Share
+                </button>
+              )}
+              <AbandonMatchButton matchId={matchId} />
+            </div>
           </div>
         )}
         <div className="flex-1 flex flex-col">
           <ScoringScreen matchId={matchId} mutate={mutate} />
         </div>
       </div>
+
+      {/* Live Share Modal */}
+      {hasLiveCode && (
+        <LiveShareModal
+          open={liveShareOpen}
+          onOpenChange={setLiveShareOpen}
+          match={match}
+        />
+      )}
     </ScoringErrorBoundary>
   );
 }

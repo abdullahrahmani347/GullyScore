@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { generateLiveCode } from '@/lib/live-emitter';
 
 export async function POST(
   request: NextRequest,
@@ -31,12 +32,28 @@ export async function POST(
       },
     });
 
+    // Generate a liveCode if this match doesn't have one yet (match going LIVE)
+    let liveCode: string | undefined;
+    if (!match.liveCode) {
+      let attempts = 0;
+      while (attempts < 10) {
+        const code = generateLiveCode();
+        const existing = await db.match.findUnique({ where: { liveCode: code } });
+        if (!existing) {
+          liveCode = code;
+          break;
+        }
+        attempts++;
+      }
+    }
+
     // Update match to LIVE and set current innings
     await db.match.update({
       where: { id },
       data: {
         status: 'LIVE',
         currentInnings: inningsNumber,
+        ...(liveCode && { liveCode }),
       },
     });
 

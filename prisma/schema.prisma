@@ -51,6 +51,7 @@ model Match {
   winnerId       String?
   venue          String?
   tournamentId   String?
+  liveCode       String?       @unique
   createdAt      DateTime      @default(now())
   completedAt    DateTime?
 

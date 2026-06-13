@@ -124,6 +124,7 @@ export interface MatchData {
   winnerId?: string | null;
   venue?: string | null;
   tournamentId?: string | null;
+  liveCode?: string | null;
   createdAt: string;
   completedAt?: string | null;
   innings: InningsState[];

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordBall } from '@/lib/scoring-engine';
+import { emitLiveEvent } from '@/lib/live-emitter';
 
 export async function POST(
   request: NextRequest,
@@ -39,6 +40,53 @@ export async function POST(
       extraType: extraType || null,
       extraRuns: extraRuns || 0,
     });
+
+    // Emit SSE event for spectators
+    const eventType = result.ball.isWicket ? 'wicket' : 'ball';
+    emitLiveEvent(id, {
+      type: eventType,
+      data: {
+        ball: result.ball,
+        inningsState: result.inningsState,
+        strikerUpdate: result.strikerUpdate,
+        needsNewBatsman: result.needsNewBatsman,
+        needsNewBowler: result.needsNewBowler,
+        needsInningsBreak: result.needsInningsBreak,
+        isMatchComplete: result.isMatchComplete,
+      },
+    });
+
+    // Also emit over_complete if over is complete
+    if (result.inningsState.isOverComplete) {
+      emitLiveEvent(id, {
+        type: 'over_complete',
+        data: {
+          inningsState: result.inningsState,
+          strikerUpdate: result.strikerUpdate,
+          needsNewBowler: result.needsNewBowler,
+        },
+      });
+    }
+
+    // Emit innings_break if needed
+    if (result.needsInningsBreak) {
+      emitLiveEvent(id, {
+        type: 'innings_break',
+        data: {
+          inningsState: result.inningsState,
+        },
+      });
+    }
+
+    // Emit match_complete if done
+    if (result.isMatchComplete) {
+      emitLiveEvent(id, {
+        type: 'match_complete',
+        data: {
+          inningsState: result.inningsState,
+        },
+      });
+    }
 
     return NextResponse.json(result);
   } catch (error) {

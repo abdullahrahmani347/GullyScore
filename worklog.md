@@ -73,3 +73,30 @@ Stage Summary:
 - All empty states are graceful with clear CTAs
 - Full CRUD flows work from blank slate
 - App is production-ready for real user data entry
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Implement Live Share feature — QR code + Server-Sent Events for real-time spectators
+
+Work Log:
+- Added `liveCode` field (String?, unique) to Match model in Prisma schema
+- Pushed schema changes to database
+- Created `/src/lib/live-emitter.ts` — in-memory EventEmitter singleton for SSE
+- Created SSE stream endpoint `/api/matches/[id]/stream` with init events and keepalive
+- Created live code resolver `/api/live/[code]` — normalizes code, returns match data
+- Updated match PATCH to generate liveCode when status=LIVE with collision retry
+- Updated innings creation to generate liveCode when match goes LIVE (primary path)
+- Updated ball recording to emit SSE events (ball, wicket, over_complete, innings_break, match_complete)
+- Added `liveCode` to MatchData type
+- Built spectator page `/live/[code]` with SSE auto-updates, connection indicator, copy/share
+- Created LiveShareModal component with QR code generation, copy link, share API
+- Added Share button to scoring screen top bar
+- Updated BottomNav to hide on /live/ paths
+- Installed qrcode package
+- All APIs verified via curl and Agent Browser
+
+Stage Summary:
+- Complete Live Share feature: 6-char match codes, SSE streaming, spectator page, QR sharing
+- Spectators see real-time score updates without login or app install
+- Scorer sees QR code button on scoring screen for instant sharing to WhatsApp groups
