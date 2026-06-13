@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 export interface PlayerEntry {
+  id?: string;
   name: string;
   jerseyNumber: string;
 }
@@ -16,7 +17,7 @@ interface PlayerFormProps {
 
 export function PlayerForm({ players, onChange }: PlayerFormProps) {
   const addPlayer = () => {
-    onChange([...players, { name: '', jerseyNumber: '' }]);
+    onChange([...players, { name: '', jerseyNumber: '', id: undefined }]);
   };
 
   const removePlayer = (index: number) => {

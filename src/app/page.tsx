@@ -2,7 +2,7 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Plus, Zap } from 'lucide-react';
+import { Plus, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -21,14 +21,56 @@ interface DashboardStats {
   activeTournaments: Tournament[];
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch dashboard data');
+  return r.json();
+});
 
 export default function DashboardPage() {
-  const { data, isLoading } = useSWR<DashboardStats>('/api/stats', fetcher, {
+  const { data, isLoading, isError, mutate } = useSWR<DashboardStats>('/api/stats', fetcher, {
     refreshInterval: 10000,
   });
 
   const hasLiveMatches = data?.liveMatches && data.liveMatches.length > 0;
+
+  if (isError) {
+    return (
+      <PageWrapper>
+        <div className="px-4 pt-6 pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-t1 flex items-center gap-2">
+                <Zap size={24} className="text-accent" />
+                GullyScore
+              </h1>
+              <p className="text-sm text-t2 mt-0.5">Cricket scoring, simplified</p>
+            </div>
+            <Link href="/matches/new">
+              <Button className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-10 px-4">
+                <Plus size={18} className="mr-1" />
+                New Match
+              </Button>
+            </Link>
+          </div>
+        </div>
+        <div className="px-4">
+          <div className="rounded-2xl border border-wicket/20 bg-wicket/5 p-8 flex flex-col items-center justify-center text-center">
+            <AlertTriangle size={40} className="text-wicket mb-3" />
+            <p className="text-sm font-medium text-t1 mb-1">Failed to load dashboard</p>
+            <p className="text-xs text-t3 mb-4">Something went wrong while fetching your data</p>
+            <Button
+              onClick={() => mutate()}
+              variant="outline"
+              className="rounded-xl border-border text-t2 hover:text-t1"
+            >
+              <RefreshCw size={14} className="mr-1.5" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
@@ -43,9 +85,7 @@ export default function DashboardPage() {
             <p className="text-sm text-t2 mt-0.5">Cricket scoring, simplified</p>
           </div>
           <Link href="/matches/new">
-            <Button
-              className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-10 px-4"
-            >
+            <Button className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-10 px-4">
               <Plus size={18} className="mr-1" />
               New Match
             </Button>
@@ -70,7 +110,7 @@ export default function DashboardPage() {
           </div>
         ) : hasLiveMatches ? (
           <div className="flex flex-col gap-3">
-            {data.liveMatches.map((match) => (
+            {data!.liveMatches.map((match) => (
               <LiveMatchBanner key={match.id} match={match} />
             ))}
           </div>

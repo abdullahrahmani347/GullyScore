@@ -22,7 +22,7 @@ interface TeamFormProps {
     shortName: string;
     color: string;
     emoji: string;
-    players: { name: string; jerseyNumber?: number }[];
+    players: { id?: string; name: string; jerseyNumber?: number }[];
   }) => Promise<void>;
   isLoading: boolean;
 }
@@ -34,6 +34,7 @@ export function TeamForm({ initialData, onSubmit, isLoading }: TeamFormProps) {
   const [emoji, setEmoji] = useState(initialData?.emoji ?? '🏏');
   const [players, setPlayers] = useState<PlayerEntry[]>(
     initialData?.players?.map((p) => ({
+      id: p.id,
       name: p.name,
       jerseyNumber: p.jerseyNumber?.toString() ?? '',
     })) ?? []
@@ -52,6 +53,7 @@ export function TeamForm({ initialData, onSubmit, isLoading }: TeamFormProps) {
       players: players
         .filter((p) => p.name.trim())
         .map((p) => ({
+          ...(p.id ? { id: p.id } : {}),
           name: p.name.trim(),
           jerseyNumber: p.jerseyNumber ? parseInt(p.jerseyNumber, 10) : undefined,
         })),

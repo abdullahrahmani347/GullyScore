@@ -168,6 +168,7 @@ model BowlerInnings {
   playerId       String
   completedOvers Int    @default(0)
   balls          Int    @default(0)
+  maidens        Int    @default(0)
   runs           Int    @default(0)
   wickets        Int    @default(0)
   wides          Int    @default(0)

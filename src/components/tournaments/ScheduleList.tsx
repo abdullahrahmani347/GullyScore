@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Radio, CheckCircle, Clock } from 'lucide-react';
+import { Radio, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import type { MatchStatus } from '@/types';
 
@@ -28,6 +28,31 @@ interface ScheduleListProps {
   schedule: ScheduleMatch[];
 }
 
+function getStatusDisplay(status: MatchStatus) {
+  switch (status) {
+    case 'LIVE':
+    case 'INNINGS_BREAK':
+      return { label: 'LIVE', icon: Radio, color: 'text-accent', isLive: true };
+    case 'COMPLETED':
+      return { label: 'Completed', icon: CheckCircle, color: 'text-t3', isLive: false };
+    case 'ABANDONED':
+      return { label: 'Abandoned', icon: AlertTriangle, color: 'text-wicket', isLive: false };
+    case 'TOSS':
+      return { label: 'Toss', icon: Clock, color: 'text-gold', isLive: false };
+    case 'UPCOMING':
+    default:
+      return { label: 'Upcoming', icon: Clock, color: 'text-t3', isLive: false };
+  }
+}
+
+function getMatchHref(status: MatchStatus, matchId: string) {
+  // UPCOMING/TOSS → scoring setup, LIVE/INNINGS_BREAK → scoring, COMPLETED → scorecard, ABANDONED → scorecard
+  if (status === 'COMPLETED' || status === 'ABANDONED') {
+    return `/matches/${matchId}/scorecard`;
+  }
+  return `/matches/${matchId}`;
+}
+
 function ScheduleList({ schedule }: ScheduleListProps) {
   if (schedule.length === 0) {
     return (
@@ -40,11 +65,11 @@ function ScheduleList({ schedule }: ScheduleListProps) {
   return (
     <div className="space-y-2">
       {schedule.map((match, idx) => {
-        const isLive = match.status === 'LIVE' || match.status === 'INNINGS_BREAK';
-        const isCompleted = match.status === 'COMPLETED';
-        const matchHref = isCompleted
-          ? `/matches/${match.id}/scorecard`
-          : `/matches/${match.id}`;
+        const statusDisplay = getStatusDisplay(match.status);
+        const StatusIcon = statusDisplay.icon;
+        const matchHref = getMatchHref(match.status, match.id);
+        const isLive = statusDisplay.isLive;
+        const isAbandoned = match.status === 'ABANDONED';
 
         const inn1 = match.innings[0];
         const inn2 = match.innings[1];
@@ -56,37 +81,32 @@ function ScheduleList({ schedule }: ScheduleListProps) {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2, delay: idx * 0.03 }}
               className={`rounded-xl border bg-bg-card p-3 transition-colors hover:border-border-act ${
-                isLive ? 'border-accent/30' : 'border-border'
+                isLive
+                  ? 'border-accent/30'
+                  : isAbandoned
+                  ? 'border-wicket/20'
+                  : 'border-border'
               }`}
             >
               {/* Status & Date */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   {isLive && (
-                    <Radio
+                    <StatusIcon
                       size={10}
                       fill="currentColor"
-                      className="text-accent animate-pulse"
+                      className={`${statusDisplay.color} animate-pulse`}
                     />
                   )}
-                  {isCompleted && <CheckCircle size={10} className="text-t3" />}
-                  {!isLive && !isCompleted && (
-                    <Clock size={10} className="text-t3" />
-                  )}
+                  {!isLive && <StatusIcon size={10} className={statusDisplay.color} />}
                   <span
                     className={`text-[10px] font-medium ${
                       isLive
                         ? 'text-accent font-bold'
-                        : 'text-t3'
+                        : statusDisplay.color
                     }`}
                   >
-                    {isLive
-                      ? 'LIVE'
-                      : isCompleted
-                      ? 'Completed'
-                      : match.status === 'TOSS'
-                      ? 'Toss'
-                      : 'Upcoming'}
+                    {statusDisplay.label}
                   </span>
                 </div>
                 <span className="text-[10px] text-t3">
@@ -138,8 +158,10 @@ function ScheduleList({ schedule }: ScheduleListProps) {
               </div>
 
               {/* Result */}
-              {isCompleted && match.result && (
-                <p className="text-[10px] text-accent font-medium mt-1.5 pt-1.5 border-t border-border/50 truncate">
+              {(match.status === 'COMPLETED' || match.status === 'ABANDONED') && match.result && (
+                <p className={`text-[10px] font-medium mt-1.5 pt-1.5 border-t border-border/50 truncate ${
+                  isAbandoned ? 'text-wicket' : 'text-accent'
+                }`}>
                   {match.result}
                 </p>
               )}

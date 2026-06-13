@@ -19,6 +19,45 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     store.setState('PROCESSING');
     store.setSubmitting(true);
 
+    // Optimistic update: immediately update the UI with expected runs
+    const optimisticInnings = { ...store.currentInnings };
+    const totalRuns = runs + (extraRuns ?? 0);
+    const isWide = extraType === 'WIDE';
+    const isNoBall = extraType === 'NO_BALL';
+    const isLegalDelivery = !isWide && !isNoBall;
+    const currentLegalBalls = optimisticInnings.currentBalls;
+    const newBallInOver = isLegalDelivery ? currentLegalBalls + 1 : 0;
+    const isOverComplete = isLegalDelivery && newBallInOver === 6;
+    const newCurrentBalls = isOverComplete ? 0 : (isLegalDelivery ? currentLegalBalls + 1 : currentLegalBalls);
+    const newCompletedOvers = optimisticInnings.completedOvers + (isOverComplete ? 1 : 0);
+
+    // Calculate optimistic striker change
+    let newStrikerId = store.strikerId;
+    let newNonStrikerId = store.nonStrikerId;
+    if (isLegalDelivery) {
+      if (runs % 2 === 1) {
+        [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
+      }
+      if (isOverComplete && runs % 2 === 0) {
+        [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
+      }
+    }
+
+    // Apply optimistic update to store
+    store.setCurrentInnings({
+      ...optimisticInnings,
+      runs: optimisticInnings.runs + totalRuns,
+      completedOvers: newCompletedOvers,
+      currentBalls: newCurrentBalls,
+      wideBalls: optimisticInnings.wideBalls + (isWide ? 1 : 0),
+      noBalls: optimisticInnings.noBalls + (isNoBall ? 1 : 0),
+      byes: optimisticInnings.byes + (extraType === 'BYE' ? (extraRuns ?? 0) : 0),
+      legByes: optimisticInnings.legByes + (extraType === 'LEG_BYE' ? (extraRuns ?? 0) : 0),
+    });
+    if (newStrikerId && newNonStrikerId) {
+      store.setStrike(newStrikerId, newNonStrikerId);
+    }
+
     try {
       const result = await fetch(`/api/matches/${matchId}/innings/${store.currentInnings.id}/balls`, {
         method: 'POST',
@@ -49,6 +88,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
       else store.setState('SCORING');
     } catch {
+      // Rollback: re-fetch actual data from server
+      await mutate();
       store.setState('SCORING');
       toast.error('Failed to record ball — please try again');
     } finally {
@@ -62,6 +103,13 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
+
+    // Optimistic: update wickets count immediately
+    const optimisticInnings = { ...store.currentInnings };
+    store.setCurrentInnings({
+      ...optimisticInnings,
+      wickets: optimisticInnings.wickets + 1,
+    });
 
     try {
       const result = await fetch(`/api/matches/${matchId}/innings/${store.currentInnings.id}/balls`, {
@@ -96,6 +144,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
       else store.setState('SCORING');
     } catch {
+      // Rollback: re-fetch actual data
+      await mutate();
       store.setState('SCORING');
       toast.error('Failed to record wicket — please try again');
     } finally {
@@ -140,16 +190,18 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     const store = useMatchStore.getState();
     if (!store.currentInnings) return;
 
+    // Optimistic
+    store.setStrike(strikerId, nonStrikerId);
+
     try {
       await fetch(`/api/matches/${matchId}/innings/${store.currentInnings.id}/striker`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ strikerId, nonStrikerId }),
       });
-
-      store.setStrike(strikerId, nonStrikerId);
       await mutate();
     } catch {
+      await mutate();
       toast.error('Failed to set batsmen');
     }
   }, [matchId, mutate]);
@@ -158,16 +210,18 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     const store = useMatchStore.getState();
     if (!store.currentInnings) return;
 
+    // Optimistic
+    store.setBowler(bowlerId);
+
     try {
       await fetch(`/api/matches/${matchId}/innings/${store.currentInnings.id}/bowler`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bowlerId }),
       });
-
-      store.setBowler(bowlerId);
       await mutate();
     } catch {
+      await mutate();
       toast.error('Failed to set bowler');
     }
   }, [matchId, mutate]);

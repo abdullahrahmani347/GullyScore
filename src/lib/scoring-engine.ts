@@ -127,6 +127,26 @@ export async function recordBall(
   const bowlerNewBalls = isLegalDelivery ? (bowlerCurrentBalls + 1) % 6 : bowlerCurrentBalls;
   const bowlerOverComplete = isLegalDelivery && (bowlerCurrentBalls + 1) === 6;
 
+  // Track maidens: a maiden over is one where the bowler conceded 0 runs across all 6 legal deliveries
+  // We track runs in the current over to determine if it's a maiden when the over completes
+  let isMaidenOver = false;
+  if (bowlerOverComplete) {
+    // Get all balls in the current over for this bowler to check if it's a maiden
+    const overBalls = await db.ball.findMany({
+      where: {
+        inningsId,
+        bowlerId,
+        overNumber: innings.completedOvers,
+      },
+    });
+    const bowlerRunsInOver = overBalls.reduce((sum, b) => {
+      const bIsBye = b.extraType === 'BYE';
+      const bIsLegBye = b.extraType === 'LEG_BYE';
+      return sum + ((bIsBye || bIsLegBye) ? 0 : (b.runs + b.extraRuns));
+    }, 0);
+    isMaidenOver = bowlerRunsInOver === 0;
+  }
+
   const existingBowler = await db.bowlerInnings.findUnique({
     where: { inningsId_playerId: { inningsId, playerId: bowlerId } }
   });
@@ -138,6 +158,7 @@ export async function recordBall(
         balls: bowlerNewBalls,
         runs: { increment: runsAgainstBowler },
         ...(bowlerOverComplete ? { completedOvers: { increment: 1 } } : {}),
+        ...(isMaidenOver ? { maidens: { increment: 1 } } : {}),
         ...(isWicket && !['RUN_OUT','RETIRED_HURT'].includes(wicketType!) ? { wickets: { increment: 1 } } : {}),
         ...(isWide ? { wides: { increment: 1 } } : {}),
         ...(isNoBall ? { noBalls: { increment: 1 } } : {}),
@@ -149,6 +170,7 @@ export async function recordBall(
         inningsId, playerId: bowlerId,
         completedOvers: bowlerOverComplete ? 1 : 0,
         balls: bowlerNewBalls,
+        maidens: isMaidenOver ? 1 : 0,
         runs: runsAgainstBowler,
         wickets: isWicket && !['RUN_OUT','RETIRED_HURT'].includes(wicketType!) ? 1 : 0,
         wides: isWide ? 1 : 0,

@@ -31,6 +31,19 @@ export async function DELETE(
 ) {
   try {
     const { pid } = await params;
+
+    // Check if player has match history
+    const hasBattingPerf = await db.batsmanInnings.count({ where: { playerId: pid } });
+    const hasBowlingPerf = await db.bowlerInnings.count({ where: { playerId: pid } });
+    const hasBallRecords = await db.ball.count({ where: { OR: [{ batsmanId: pid }, { bowlerId: pid }] } });
+
+    if (hasBattingPerf > 0 || hasBowlingPerf > 0 || hasBallRecords > 0) {
+      return NextResponse.json(
+        { error: 'This player has match history and cannot be removed.' },
+        { status: 400 }
+      );
+    }
+
     await db.player.delete({ where: { id: pid } });
     return NextResponse.json({ success: true });
   } catch (error) {

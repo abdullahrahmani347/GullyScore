@@ -54,7 +54,7 @@ function BowlingTable({ bowling }: BowlingTableProps) {
                     {formatOvers(b.completedOvers, b.balls)}
                   </td>
                   <td className="text-right py-2 px-1.5 text-t3 font-[family-name:var(--font-mono)]">
-                    0
+                    {b.maidens}
                   </td>
                   <td className="text-right py-2 px-1.5 text-t1 font-[family-name:var(--font-mono)]">
                     {b.runs}

@@ -57,6 +57,7 @@ export interface BowlerInningsData {
   player: Player;
   completedOvers: number;
   balls: number;
+  maidens: number;
   runs: number;
   wickets: number;
   wides: number;

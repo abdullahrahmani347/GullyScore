@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -33,11 +34,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
       </head>
       <body className="bg-bg-app text-t1 antialiased">
-        <main className="min-h-dvh pb-20">
-          {children}
-        </main>
-        <BottomNav />
-        <Toaster />
+        <ErrorBoundary>
+          <main className="min-h-dvh pb-20">
+            {children}
+          </main>
+          <BottomNav />
+          <Toaster />
+        </ErrorBoundary>
       </body>
     </html>
   );

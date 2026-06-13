@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Trophy } from 'lucide-react';
+import { Trophy, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Tournament, TournamentStatus } from '@/types';
 
 interface TournamentCardProps {
   tournament: Tournament;
   index: number;
+  onDelete?: (tournament: Tournament) => void;
 }
 
 function StatusBadge({ status }: { status: TournamentStatus }) {
@@ -34,23 +35,26 @@ function StatusBadge({ status }: { status: TournamentStatus }) {
   }
 }
 
-function TournamentCard({ tournament, index }: TournamentCardProps) {
+function TournamentCard({ tournament, index, onDelete }: TournamentCardProps) {
   const completedMatches = tournament.matches.filter(
     (m) => m.status === 'COMPLETED'
+  ).length;
+  const abandonedMatches = tournament.matches.filter(
+    (m) => m.status === 'ABANDONED'
   ).length;
   const totalMatches = tournament.matches.length;
   const progress = totalMatches > 0 ? (completedMatches / totalMatches) * 100 : 0;
 
   return (
-    <Link href={`/tournaments/${tournament.id}`}>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25, delay: index * 0.04 }}
-        className={`rounded-xl border bg-bg-card p-4 transition-colors hover:border-border-act ${
-          tournament.status === 'ONGOING' ? 'border-gold/30' : 'border-border'
-        }`}
-      >
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, delay: index * 0.04 }}
+      className={`rounded-xl border bg-bg-card transition-colors hover:border-border-act ${
+        tournament.status === 'ONGOING' ? 'border-gold/30' : 'border-border'
+      }`}
+    >
+      <Link href={`/tournaments/${tournament.id}`} className="block p-4">
         <div className="flex items-start gap-3">
           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gold-dim flex-shrink-0">
             <Trophy size={18} className="text-gold" />
@@ -79,13 +83,36 @@ function TournamentCard({ tournament, index }: TournamentCardProps) {
                 {completedMatches}/{totalMatches}
               </span>
             </div>
-            <p className="text-[10px] text-t3 mt-1">
-              Created {format(new Date(tournament.createdAt), 'dd MMM yyyy')}
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-[10px] text-t3">
+                Created {format(new Date(tournament.createdAt), 'dd MMM yyyy')}
+              </p>
+              {abandonedMatches > 0 && (
+                <span className="text-[10px] text-wicket font-medium">
+                  {abandonedMatches} abandoned
+                </span>
+              )}
+            </div>
           </div>
         </div>
-      </motion.div>
-    </Link>
+      </Link>
+
+      {onDelete && (
+        <div className="border-t border-border/50 px-4 py-2 flex justify-end">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete(tournament);
+            }}
+            className="flex items-center gap-1.5 text-xs text-t3 hover:text-wicket transition-colors px-2 py-1 rounded-lg hover:bg-wicket-bg"
+          >
+            <Trash2 size={12} />
+            Delete
+          </button>
+        </div>
+      )}
+    </motion.div>
   );
 }
 

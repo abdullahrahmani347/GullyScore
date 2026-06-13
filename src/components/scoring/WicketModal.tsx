@@ -22,6 +22,7 @@ const wicketTypes: { type: WicketType; label: string; icon: string }[] = [
   { type: 'LBW', label: 'LBW', icon: '🦵' },
   { type: 'STUMPED', label: 'Stumped', icon: '🧤' },
   { type: 'HIT_WICKET', label: 'Hit Wicket', icon: '💥' },
+  { type: 'RETIRED_HURT', label: 'Retired Hurt', icon: '🏥' },
 ];
 
 export function WicketModal({ open, match, currentInnings, onConfirm, onCancel }: WicketModalProps) {

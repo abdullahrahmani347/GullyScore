@@ -1,4 +1,5 @@
 import html2canvas from 'html2canvas';
+import type { MatchData } from '@/types';
 
 export async function exportScorecardImage(elementId: string): Promise<void> {
   const element = document.getElementById(elementId);
@@ -31,17 +32,17 @@ export async function exportScorecardImage(elementId: string): Promise<void> {
   }
 }
 
-export function generateWhatsAppSummary(match: any): string {
+export function generateWhatsAppSummary(match: MatchData): string {
   const inn1 = match.innings?.[0];
   const inn2 = match.innings?.[1];
   if (!inn1) return '';
   
   const date = new Date(match.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
   
-  const topBat1 = [...inn1.batting].sort((a: any, b: any) => b.runs - a.runs)[0];
-  const topBowl1 = [...inn1.bowling].sort((a: any, b: any) => b.wickets - a.wickets)[0];
-  const topBat2 = inn2 ? [...inn2.batting].sort((a: any, b: any) => b.runs - a.runs)[0] : null;
-  const topBowl2 = inn2 ? [...inn2.bowling].sort((a: any, b: any) => b.wickets - a.wickets)[0] : null;
+  const topBat1 = [...inn1.batting].sort((a, b) => b.runs - a.runs)[0];
+  const topBowl1 = [...inn1.bowling].sort((a, b) => b.wickets - a.wickets)[0];
+  const topBat2 = inn2 ? [...inn2.batting].sort((a, b) => b.runs - a.runs)[0] : null;
+  const topBowl2 = inn2 ? [...inn2.bowling].sort((a, b) => b.wickets - a.wickets)[0] : null;
 
   return `🏏 *GullyScore Match Report*
 📅 ${date}${match.venue ? ` | ${match.venue}` : ''}

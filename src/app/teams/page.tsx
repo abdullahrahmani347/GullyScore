@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,10 +15,13 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { toast } from 'sonner';
 import type { Team } from '@/types';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url).then((r) => {
+  if (!r.ok) throw new Error('Failed to fetch teams');
+  return r.json();
+});
 
 export default function TeamsPage() {
-  const { data: teams, isLoading, mutate } = useSWR<Team[]>('/api/teams', fetcher);
+  const { data: teams, isLoading, isError, mutate } = useSWR<Team[]>('/api/teams', fetcher);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -47,8 +50,12 @@ export default function TeamsPage() {
         const err = await res.json();
         throw new Error(err.error || 'Failed to create team');
       }
+      const newTeam = await res.json();
       toast.success(`${data.name} created!`);
       setShowForm(false);
+      // Optimistic update: add the new team to the list
+      await mutate((current) => current ? [newTeam, ...current] : [newTeam], false);
+      // Then revalidate
       mutate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create team');
@@ -56,6 +63,32 @@ export default function TeamsPage() {
       setIsCreating(false);
     }
   };
+
+  if (isError) {
+    return (
+      <PageWrapper>
+        <div className="px-4 pt-6 pb-2">
+          <h1 className="text-2xl font-bold text-t1">Teams</h1>
+          <p className="text-sm text-t2 mt-0.5">Manage your cricket teams</p>
+        </div>
+        <div className="px-4 mt-4">
+          <div className="rounded-2xl border border-wicket/20 bg-wicket/5 p-8 flex flex-col items-center justify-center text-center">
+            <AlertTriangle size={40} className="text-wicket mb-3" />
+            <p className="text-sm font-medium text-t1 mb-1">Failed to load teams</p>
+            <p className="text-xs text-t3 mb-4">Something went wrong while fetching teams</p>
+            <Button
+              onClick={() => mutate()}
+              variant="outline"
+              className="rounded-xl border-border text-t2 hover:text-t1"
+            >
+              <RefreshCw size={14} className="mr-1.5" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      </PageWrapper>
+    );
+  }
 
   return (
     <PageWrapper>
