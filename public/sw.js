@@ -11,12 +11,12 @@
  * retry logic, and recovery UI.
  */
 
-const CACHE_VERSION = 'gullyscore-v1';
-const STATIC_CACHE = `${CACHE_VERSION}-static`;
-const API_CACHE = `${CACHE_VERSION}-api`;
+var CACHE_VERSION = 'gullyscore-v1';
+var STATIC_CACHE = CACHE_VERSION + '-static';
+var API_CACHE = CACHE_VERSION + '-api';
 
 // Static asset patterns — CacheFirst
-const STATIC_PATTERNS = [
+var STATIC_PATTERNS = [
   /\.js$/i,
   /\.css$/i,
   /\.woff2?$/i,
@@ -35,27 +35,27 @@ const STATIC_PATTERNS = [
 ];
 
 // API routes — NetworkFirst with cache fallback
-const API_PATTERNS = [
+var API_PATTERNS = [
   /\/api\//i,
 ];
 
 // SSE stream routes — NetworkOnly (never cache)
-const SSE_PATTERNS = [
+var SSE_PATTERNS = [
   /\/api\/matches\/[^/]+\/stream/i,
   /\/api\/live\//i,
 ];
 
 // Install event — pre-cache critical assets
-self.addEventListener('install', (event) => {
+self.addEventListener('install', function(event) {
   event.waitUntil(
-    caches.open(STATIC_CACHE).then((cache) => {
+    caches.open(STATIC_CACHE).then(function(cache) {
       // Pre-cache the app shell
       return cache.addAll([
         '/',
         '/manifest.json',
         '/icons/icon-192.png',
         '/icons/icon-512.png',
-      ]).catch(() => {
+      ]).catch(function() {
         // Silently fail if assets aren't available yet (first build)
         console.log('[SW] Some pre-cache assets not available yet');
       });
@@ -66,13 +66,15 @@ self.addEventListener('install', (event) => {
 });
 
 // Activate event — clean up old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', function(event) {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+    caches.keys().then(function(cacheNames) {
       return Promise.all(
         cacheNames
-          .filter((name) => name.startsWith('gullyscore-') && name !== STATIC_CACHE && name !== API_CACHE)
-          .map((name) => {
+          .filter(function(name) {
+            return name.startsWith('gullyscore-') && name !== STATIC_CACHE && name !== API_CACHE;
+          })
+          .map(function(name) {
             console.log('[SW] Deleting old cache:', name);
             return caches.delete(name);
           })
@@ -84,9 +86,9 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch event — route requests to appropriate caching strategy
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  const url = new URL(request.url);
+self.addEventListener('fetch', function(event) {
+  var request = event.request;
+  var url = new URL(request.url);
 
   // Only handle same-origin requests
   if (url.origin !== self.location.origin) {
@@ -99,18 +101,18 @@ self.addEventListener('fetch', (event) => {
   }
 
   // SSE streams — NetworkOnly, never cache
-  if (SSE_PATTERNS.some(pattern => pattern.test(url.pathname))) {
+  if (SSE_PATTERNS.some(function(pattern) { return pattern.test(url.pathname); })) {
     return;
   }
 
   // Static assets — CacheFirst
-  if (STATIC_PATTERNS.some(pattern => pattern.test(url.pathname) || pattern.test(url.href))) {
+  if (STATIC_PATTERNS.some(function(pattern) { return pattern.test(url.pathname) || pattern.test(url.href); })) {
     event.respondWith(cacheFirst(request));
     return;
   }
 
   // API GET requests — NetworkFirst with cache fallback
-  if (API_PATTERNS.some(pattern => pattern.test(url.pathname))) {
+  if (API_PATTERNS.some(function(pattern) { return pattern.test(url.pathname); })) {
     event.respondWith(networkFirstWithCache(request));
     return;
   }
@@ -131,27 +133,30 @@ self.addEventListener('fetch', (event) => {
  * 2. If found, return cached response
  * 3. If not found, fetch from network and cache it
  */
-async function cacheFirst(request: Request): Promise<Response> {
-  const cached = await caches.match(request);
-  if (cached) {
-    return cached;
-  }
+function cacheFirst(request) {
+  return caches.match(request).then(function(cached) {
+    if (cached) {
+      return cached;
+    }
 
-  try {
-    const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(STATIC_CACHE);
-      cache.put(request, response.clone());
-    }
-    return response;
-  } catch (error) {
-    // Network failed and no cache — return offline fallback for navigation
-    if (request.mode === 'navigate') {
-      const cached = await caches.match('/');
-      if (cached) return cached;
-    }
-    return new Response('Offline', { status: 503, statusText: 'Offline' });
-  }
+    return fetch(request).then(function(response) {
+      if (response.ok) {
+        var cachePromise = caches.open(STATIC_CACHE).then(function(cache) {
+          cache.put(request, response.clone());
+        });
+      }
+      return response;
+    }).catch(function(error) {
+      // Network failed and no cache — return offline fallback for navigation
+      if (request.mode === 'navigate') {
+        return caches.match('/').then(function(cachedRoot) {
+          if (cachedRoot) return cachedRoot;
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        });
+      }
+      return new Response('Offline', { status: 503, statusText: 'Offline' });
+    });
+  });
 }
 
 /**
@@ -161,54 +166,60 @@ async function cacheFirst(request: Request): Promise<Response> {
  * 3. If network fails, return cached response
  * 4. If no cache either, return offline response
  */
-async function networkFirstWithCache(request: Request): Promise<Response> {
-  try {
-    const response = await fetch(request);
-
+function networkFirstWithCache(request) {
+  return fetch(request).then(function(response) {
     if (response.ok) {
       // Cache successful responses
-      const cache = await caches.open(API_CACHE);
-      // Only cache API responses for a limited time
-      if (request.url.includes('/api/')) {
-        const responseToCache = response.clone();
-        cache.put(request, responseToCache);
-      } else {
+      var cacheName = API_CACHE;
+      caches.open(cacheName).then(function(cache) {
         cache.put(request, response.clone());
-      }
+      });
     }
-
     return response;
-  } catch (error) {
+  }).catch(function(error) {
     // Network failed — try cache
-    const cached = await caches.match(request);
-    if (cached) {
-      return cached;
-    }
+    return caches.match(request).then(function(cached) {
+      if (cached) {
+        return cached;
+      }
 
-    // No cache either — for navigation, try the app shell
-    if (request.mode === 'navigate') {
-      const appShell = await caches.match('/');
-      if (appShell) return appShell;
-    }
+      // No cache either — for navigation, try the app shell
+      if (request.mode === 'navigate') {
+        return caches.match('/').then(function(cachedRoot) {
+          if (cachedRoot) return cachedRoot;
+          return new Response(
+            JSON.stringify({ error: 'You are offline and this data is not cached' }),
+            {
+              status: 503,
+              statusText: 'Offline',
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        });
+      }
 
-    return new Response(JSON.stringify({ error: 'You are offline and this data is not cached' }), {
-      status: 503,
-      statusText: 'Offline',
-      headers: { 'Content-Type': 'application/json' },
+      return new Response(
+        JSON.stringify({ error: 'You are offline and this data is not cached' }),
+        {
+          status: 503,
+          statusText: 'Offline',
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
     });
-  }
+  });
 }
 
 // Listen for messages from the app
-self.addEventListener('message', (event) => {
+self.addEventListener('message', function(event) {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
 
   if (event.data && event.data.type === 'CLEAR_CACHES') {
-    caches.keys().then((names) => {
-      for (const name of names) {
-        caches.delete(name);
+    caches.keys().then(function(names) {
+      for (var i = 0; i < names.length; i++) {
+        caches.delete(names[i]);
       }
     });
   }
