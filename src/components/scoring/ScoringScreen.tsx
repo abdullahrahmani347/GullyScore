@@ -8,6 +8,7 @@ import { ScoreButtons } from './ScoreButtons';
 import { OverStrip } from './OverStrip';
 import { BatsmenCard } from './BatsmenCard';
 import { BowlerCard } from './BowlerCard';
+import { CurrentPartnership } from './CurrentPartnership';
 import { ExtrasPanel } from './ExtrasPanel';
 import { WicketModal } from './WicketModal';
 import { PlayerSelectModal } from './PlayerSelectModal';
@@ -305,6 +306,11 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
       <div className="px-3 mt-2 grid grid-cols-2 gap-2">
         <BatsmenCard match={match} currentInnings={currentInnings} />
         <BowlerCard currentInnings={currentInnings} />
+      </div>
+
+      {/* Current partnership */}
+      <div className="px-3 mt-2">
+        <CurrentPartnership currentInnings={currentInnings} />
       </div>
 
       {/* Spacer to push buttons to bottom */}

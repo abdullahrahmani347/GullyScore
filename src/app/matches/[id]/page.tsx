@@ -268,10 +268,17 @@ export default function ScoringPage() {
       const currentInn = match.innings?.find((i) => !i.isCompleted);
       if (currentInn) {
         const currentState = store.currentState;
-        // Always update currentInnings from server data EXCEPT during PROCESSING
-        // (to avoid race conditions with optimistic updates)
-        // During NEW_BATSMAN, we MUST update so the batting list refreshes
-        if (currentState !== 'PROCESSING') {
+        // During PROCESSING: skip entirely (race condition with optimistic updates)
+        // During NEW_BATSMAN / OVER_COMPLETE: refresh data but DON'T reset striker/bowler IDs
+        //   (the scorer is making selections — resetting would wipe their pending state)
+        // During all other states: full refresh including IDs
+        if (currentState === 'PROCESSING') {
+          // Skip — optimistic update is in flight
+        } else if (currentState === 'NEW_BATSMAN' || currentState === 'OVER_COMPLETE') {
+          // Only refresh the innings data (batting list, bowling list, etc.)
+          // without resetting strikerId/nonStrikerId/currentBowlerId
+          store.refreshInningsData(currentInn);
+        } else {
           store.setCurrentInnings(currentInn);
         }
       }

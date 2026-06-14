@@ -28,6 +28,13 @@ export const useMatchStore = create<MatchStoreState>()(
         nonStrikerId: innings.nonStrikerId ?? null,
         currentBowlerId: innings.currentBowlerId ?? null,
       }),
+      /** Update innings data (batting/bowling/balls/partnerships) WITHOUT resetting striker/bowler IDs.
+       *  Used during SWR revalidation in transitional states (NEW_BATSMAN, OVER_COMPLETE)
+       *  so the batting list refreshes while preserving the scorer's pending selections.
+       */
+      refreshInningsData: (innings: InningsState) => set({
+        currentInnings: innings,
+      }),
       setStrike: (strikerId: string, nonStrikerId: string) => set({ strikerId, nonStrikerId }),
       setBowler: (bowlerId: string) => set({ currentBowlerId: bowlerId }),
       setState: (state: ScoringState) => set({ currentState: state }),

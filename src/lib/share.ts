@@ -45,11 +45,11 @@ export function generateWhatsAppSummary(match: MatchData): string {
   const topBowl2 = inn2 ? [...inn2.bowling].sort((a, b) => b.wickets - a.wickets)[0] : null;
 
   // Best partnership for each innings
-  const bestPartnership1 = (inn1 as any)?.partnerships?.length > 0
-    ? [...(inn1 as any).partnerships].sort((a: any, b: any) => b.runs - a.runs)[0]
+  const bestPartnership1 = inn1.partnerships?.length > 0
+    ? [...inn1.partnerships].sort((a, b) => b.runs - a.runs)[0]
     : null;
-  const bestPartnership2 = inn2 && (inn2 as any)?.partnerships?.length > 0
-    ? [...(inn2 as any).partnerships].sort((a: any, b: any) => b.runs - a.runs)[0]
+  const bestPartnership2 = inn2 && inn2.partnerships?.length > 0
+    ? [...inn2.partnerships].sort((a, b) => b.runs - a.runs)[0]
     : null;
 
   return `🏏 *GullyScore Match Report*

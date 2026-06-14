@@ -86,6 +86,7 @@ export interface InningsState {
   batting: BatsmanInningsData[];
   bowling: BowlerInningsData[];
   balls: BallRecord[];
+  partnerships?: PartnershipData[];
 }
 
 export interface BallRecord {
@@ -211,6 +212,8 @@ export interface MatchStoreState {
 
   setMatch: (match: MatchData) => void;
   setCurrentInnings: (innings: InningsState) => void;
+  /** Update innings data without resetting striker/bowler IDs */
+  refreshInningsData: (innings: InningsState) => void;
   setStrike: (strikerId: string, nonStrikerId: string) => void;
   setBowler: (bowlerId: string) => void;
   setState: (state: ScoringState) => void;

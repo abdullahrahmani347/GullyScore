@@ -19,6 +19,13 @@ export async function GET(
             batting: { include: { player: true }, orderBy: { battingOrder: 'asc' } },
             bowling: { include: { player: true } },
             balls: { orderBy: { deliveryNumber: 'asc' } },
+            partnerships: {
+              include: {
+                batsman1: true,
+                batsman2: true,
+              },
+              orderBy: { wicketNumber: 'desc' },
+            },
           },
           orderBy: { inningsNumber: 'asc' },
         },
@@ -63,6 +70,10 @@ export async function PATCH(
               batting: { include: { player: true } },
               bowling: { include: { player: true } },
               balls: { orderBy: { deliveryNumber: 'asc' } },
+              partnerships: {
+                include: { batsman1: true, batsman2: true },
+                orderBy: { wicketNumber: 'desc' },
+              },
             },
             orderBy: { inningsNumber: 'asc' },
           },
@@ -117,6 +128,10 @@ export async function PATCH(
             batting: { include: { player: true } },
             bowling: { include: { player: true } },
             balls: { orderBy: { deliveryNumber: 'asc' } },
+            partnerships: {
+              include: { batsman1: true, batsman2: true },
+              orderBy: { wicketNumber: 'desc' },
+            },
           },
           orderBy: { inningsNumber: 'asc' },
         },
