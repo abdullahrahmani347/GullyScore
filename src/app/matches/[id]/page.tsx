@@ -268,7 +268,10 @@ export default function ScoringPage() {
       const currentInn = match.innings?.find((i) => !i.isCompleted);
       if (currentInn) {
         const currentState = store.currentState;
-        if (currentState === 'SCORING' || currentState === 'PROCESSING') {
+        // Always update currentInnings from server data EXCEPT during PROCESSING
+        // (to avoid race conditions with optimistic updates)
+        // During NEW_BATSMAN, we MUST update so the batting list refreshes
+        if (currentState !== 'PROCESSING') {
           store.setCurrentInnings(currentInn);
         }
       }

@@ -133,7 +133,14 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
 
     store.setStrike(newStriker, newNonStriker);
     handleSetStriker(newStriker, newNonStriker).then(() => {
-      store.setState('SCORING');
+      // Check if the over was also complete when the wicket fell
+      // (wicket on last ball of over → need new bowler too)
+      const lastResult = store.lastBallResult;
+      if (lastResult?.needsNewBowler) {
+        store.setState('OVER_COMPLETE');
+      } else {
+        store.setState('SCORING');
+      }
     });
   }, [store, handleSetStriker]);
 

@@ -177,12 +177,41 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
     const summary = getBallSummary(ballData);
 
-    // Optimistic: update wickets count immediately
+    // Optimistic: update wickets count, over state, and batting list immediately
     const optimisticInnings = { ...store.currentInnings };
+    const isLegalDelivery = true; // Wickets are always on legal deliveries
+    const currentLegalBalls = optimisticInnings.currentBalls;
+    const newBallInOver = currentLegalBalls + 1;
+    const isOverComplete = newBallInOver === 6;
+    const newCurrentBalls = isOverComplete ? 0 : newBallInOver;
+    const newCompletedOvers = optimisticInnings.completedOvers + (isOverComplete ? 1 : 0);
+
+    // Optimistic striker change for wicket: dismissed player leaves, non-striker stays
+    let newStrikerId = store.nonStrikerId; // The surviving batsman becomes striker
+    let newNonStrikerId = ''; // New batsman to be selected
+
+    // If the dismissed player was the non-striker (run out), striker stays
+    if (wicketData.dismissedPlayerId === store.nonStrikerId) {
+      newStrikerId = store.strikerId;
+      newNonStrikerId = '';
+    }
+
+    // Optimistically mark the dismissed batsman as out in the batting list
+    const updatedBatting = optimisticInnings.batting.map((b) => {
+      if (b.playerId === wicketData.dismissedPlayerId) {
+        return { ...b, isOut: true, dismissalType: wicketData.wicketType };
+      }
+      return b;
+    });
+
     store.setCurrentInnings({
       ...optimisticInnings,
       wickets: optimisticInnings.wickets + 1,
+      completedOvers: newCompletedOvers,
+      currentBalls: newCurrentBalls,
+      batting: updatedBatting,
     });
+    store.setStrike(newStrikerId || '', newNonStrikerId);
 
     try {
       const { data: result, offline } = await recordBallOffline(
@@ -195,6 +224,29 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       if (offline) {
         // Wicket recorded offline — keep optimistic state
         toast.info(`WICKET — saved offline`, { duration: 2000 });
+
+        // Store a synthetic lastBallResult so the new batsman flow
+        // knows whether the over was also complete
+        store.setLastBallResult({
+          ball: ballData as any,
+          inningsState: {
+            runs: optimisticInnings.runs,
+            wickets: optimisticInnings.wickets + 1,
+            completedOvers: newCompletedOvers,
+            currentBalls: newCurrentBalls,
+            currentRunRate: 0,
+            requiredRunRate: null,
+            runsNeeded: null,
+            ballsRemaining: null,
+            isCompleted: false,
+            isOverComplete,
+          },
+          strikerUpdate: { strikerId: newStrikerId || '', nonStrikerId: '' },
+          needsNewBatsman: true,
+          needsNewBowler: isOverComplete,
+          needsInningsBreak: false,
+          isMatchComplete: false,
+        });
         store.setState('NEW_BATSMAN');
       } else {
         // Online success — use server response
