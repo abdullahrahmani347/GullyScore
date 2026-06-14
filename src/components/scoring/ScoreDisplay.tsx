@@ -3,6 +3,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMatchStore } from '@/store/matchStore';
 import { formatOvers, calculateCRR, calculateRRR } from '@/lib/scoring-utils';
+import { computeProjection, computeRRRDanger } from '@/lib/intelligence';
 import type { MatchData, InningsState } from '@/types';
 
 interface ScoreDisplayProps {
@@ -20,6 +21,7 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
 
   const crr = lastBallResult?.inningsState?.currentRunRate ?? calculateCRR(runs, completedOvers, currentBalls);
 
+  const isFirstInnings = currentInnings.inningsNumber === 1;
   const isSecondInnings = currentInnings.inningsNumber === 2;
   const target = currentInnings.target;
 
@@ -29,7 +31,15 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
   const runsNeeded = isSecondInnings && target ? (lastBallResult?.inningsState?.runsNeeded ?? target - runs) : null;
   const ballsRemaining = lastBallResult?.inningsState?.ballsRemaining ?? null;
 
-  // Determine if chase is difficult
+  // ── Intelligence Layer computations ──
+
+  // PAR PROJECTION (1st innings only)
+  const projection = computeProjection(currentInnings, match.totalOvers);
+
+  // RRR Danger Meter (2nd innings only)
+  const rrrDanger = computeRRRDanger(rrr);
+
+  // Determine if chase is difficult (legacy, kept for backwards compat)
   const isDifficultChase = rrr !== null && crr > 0 && rrr > crr * 1.3;
 
   // Last ball flash
@@ -98,16 +108,50 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
         </span>
       </div>
 
-      {/* Run rates */}
-      <div className="flex items-center gap-4 mt-2">
+      {/* Run rates + Intelligence chips */}
+      <div className="flex items-center gap-3 mt-2 flex-wrap">
         <span className="text-xs text-t2">
           CRR: <span className="text-t1 font-mono font-medium">{crr.toFixed(2)}</span>
         </span>
-        {isSecondInnings && rrr !== null && runsNeeded !== null && (
+
+        {/* PAR PROJECTION chip (1st innings) */}
+        {isFirstInnings && projection && (
+          <motion.span
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-accent/10 border border-accent/25 text-accent"
+          >
+            <span className="text-accent/70">PAR</span>
+            ~{projection.projectedScore}/{projection.projectedWickets} in {projection.projectedOvers} ov
+          </motion.span>
+        )}
+
+        {/* RRR with Danger Meter (2nd innings) */}
+        {isSecondInnings && rrrDanger && (
+          <motion.span
+            key={`rrr-${rrrDanger.level}`}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`
+              inline-flex items-center gap-1.5 text-xs font-mono font-medium px-2 py-0.5 rounded-full border
+              ${rrrDanger.color} ${rrrDanger.bgColor} ${rrrDanger.borderColor}
+            `}
+          >
+            RRR: {rrrDanger.rrr.toFixed(1)}
+            <span className={`text-[9px] font-semibold uppercase tracking-wider ${rrrDanger.color} opacity-80`}>
+              {rrrDanger.label}
+            </span>
+          </motion.span>
+        )}
+
+        {/* Fallback RRR without danger meter (if danger meter not computed) */}
+        {isSecondInnings && rrr !== null && !rrrDanger && (
           <span className={`text-xs ${isDifficultChase ? 'text-wicket' : 'text-accent'}`}>
             RRR: <span className="font-mono font-medium">{rrr.toFixed(2)}</span>
           </span>
         )}
+
+        {/* Need / Balls remaining */}
         {isSecondInnings && runsNeeded !== null && runsNeeded > 0 && (
           <span className="text-xs text-t3">
             Need <span className="text-t1 font-mono font-medium">{runsNeeded}</span>

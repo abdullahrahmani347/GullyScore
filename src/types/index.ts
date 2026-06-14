@@ -174,6 +174,13 @@ export interface PartnershipData {
   isOpen: boolean;
 }
 
+/** Auto-commentary event generated after significant balls */
+export interface CommentaryEvent {
+  category: 'SIX' | 'FOUR' | 'WICKET_BOWLED' | 'WICKET_CAUGHT' | 'WICKET_OTHER' | 'MILESTONE_50' | 'MILESTONE_100' | 'OVER_COMPLETE' | 'DOT_SEQUENCE' | 'CHASE_CLOSE' | 'EXTRA';
+  text: string;
+  timestamp: number;
+}
+
 export interface TournamentTeamStat {
   teamId: string;
   team: Team;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useMatchStore } from '@/store/matchStore';
 import { useScoringHandlers } from '@/hooks/useScoringHandlers';
 import { ScoreDisplay } from './ScoreDisplay';
@@ -9,6 +9,8 @@ import { OverStrip } from './OverStrip';
 import { BatsmenCard } from './BatsmenCard';
 import { BowlerCard } from './BowlerCard';
 import { CurrentPartnership } from './CurrentPartnership';
+import { MilestoneAlertStrip } from './MilestoneAlertStrip';
+import { CommentaryTicker } from './CommentaryTicker';
 import { ExtrasPanel } from './ExtrasPanel';
 import { WicketModal } from './WicketModal';
 import { PlayerSelectModal } from './PlayerSelectModal';
@@ -16,7 +18,8 @@ import { OverCompleteModal } from './OverCompleteModal';
 import { InningsBreakScreen } from './InningsBreakScreen';
 import { MatchResultScreen } from './MatchResultScreen';
 import { toast } from 'sonner';
-import type { ExtraType } from '@/types';
+import { computeMilestoneAlerts, generateCommentary, getBatsmanMilestone } from '@/lib/intelligence';
+import type { ExtraType, CommentaryEvent, BallRecord } from '@/types';
 
 interface ScoringScreenProps {
   matchId: string;
@@ -39,9 +42,39 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   const [extrasPanelOpen, setExtrasPanelOpen] = useState(false);
   const [wicketModalOpen, setWicketModalOpen] = useState(false);
 
+  // ── Intelligence Layer State ──
+  const [commentary, setCommentary] = useState<CommentaryEvent | null>(null);
+  const previousBatsmanRunsRef = useRef<Record<string, number>>({});
+
   const match = store.match;
   const currentInnings = store.currentInnings;
   const currentState = store.currentState;
+
+  // ── Milestone alerts (computed every render — cheap) ──
+  const milestoneAlerts = useMemo(() => {
+    if (!match || !currentInnings) return [];
+    return computeMilestoneAlerts(match, currentInnings, store.currentBowlerId);
+  }, [match, currentInnings, store.currentBowlerId]);
+
+  // ── Track batsman runs before each ball for milestone detection ──
+  const trackBatsmanRunsBefore = useCallback(() => {
+    if (!currentInnings) return;
+    const runsMap: Record<string, number> = {};
+    for (const b of currentInnings.batting) {
+      runsMap[b.playerId] = b.runs;
+    }
+    previousBatsmanRunsRef.current = runsMap;
+  }, [currentInnings]);
+
+  // ── Generate commentary after a ball is recorded ──
+  const triggerCommentary = useCallback((ball: BallRecord) => {
+    if (!currentInnings || !match) return;
+    const prevRuns = previousBatsmanRunsRef.current[ball.batsmanId];
+    const event = generateCommentary(ball, currentInnings, match, prevRuns);
+    if (event) {
+      setCommentary(event);
+    }
+  }, [currentInnings, match]);
 
   // Get available players based on current state
   const getAvailableBatsmen = useCallback(() => {
@@ -71,27 +104,26 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
     return store.currentBowlerId ? [store.currentBowlerId] : [];
   }, [store.currentBowlerId]);
 
-  // Scoring handlers
+  // Scoring handlers — wrapped with intelligence layer
   const onScore = useCallback((runs: number) => {
+    trackBatsmanRunsBefore();
     handleScore(runs);
-  }, [handleScore]);
+  }, [handleScore, trackBatsmanRunsBefore]);
 
   const onExtras = useCallback(() => {
     setExtrasPanelOpen(true);
   }, []);
 
   const onExtrasConfirm = useCallback((extraType: ExtraType, extraRuns: number) => {
+    trackBatsmanRunsBefore();
     if (extraType === 'NO_BALL') {
-      // No ball: extraRuns=1 (penalty), runs=batsmanRuns
       handleScore(extraRuns, extraType, 1);
     } else if (extraType === 'WIDE') {
-      // Wide: extraRuns = additional runs beyond the 1 penalty
       handleScore(0, extraType, extraRuns + 1);
     } else {
-      // Bye / Leg Bye
       handleScore(0, extraType, extraRuns);
     }
-  }, [handleScore]);
+  }, [handleScore, trackBatsmanRunsBefore]);
 
   const onWicket = useCallback(() => {
     setWicketModalOpen(true);
@@ -99,12 +131,28 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
 
   const onWicketConfirm = useCallback((data: { wicketType: any; dismissedPlayerId: string; fielderPlayerId?: string }) => {
     setWicketModalOpen(false);
+    trackBatsmanRunsBefore();
     handleWicket(data);
-  }, [handleWicket]);
+  }, [handleWicket, trackBatsmanRunsBefore]);
 
   const onUndo = useCallback(() => {
     handleUndo();
   }, [handleUndo]);
+
+  // ── Generate commentary when lastBallResult changes ──
+  const lastBallResult = store.lastBallResult;
+  const lastBallResultId = lastBallResult?.ball?.id;
+
+  // We use a ref to avoid re-triggering commentary for the same ball
+  const lastCommentedBallId = useRef<string | null>(null);
+
+  // Effect: when lastBallResult changes, generate commentary
+  useMemo(() => {
+    if (!lastBallResult?.ball || !currentInnings || !match) return;
+    if (lastBallResult.ball.id === lastCommentedBallId.current) return;
+    lastCommentedBallId.current = lastBallResult.ball.id;
+    triggerCommentary(lastBallResult.ball);
+  }, [lastBallResultId, currentInnings, match, triggerCommentary, lastBallResult]);
 
   // Player selection handlers
   const onOpenerSelect = useCallback((playerId: string) => {
@@ -295,6 +343,21 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
       {/* Score display */}
       <div className="px-3 pt-3">
         <ScoreDisplay match={match} currentInnings={currentInnings} />
+      </div>
+
+      {/* Milestone alerts */}
+      {milestoneAlerts.length > 0 && (
+        <div className="px-3 mt-2">
+          <MilestoneAlertStrip alerts={milestoneAlerts} />
+        </div>
+      )}
+
+      {/* Commentary ticker */}
+      <div className="px-3 mt-2">
+        <CommentaryTicker
+          commentary={commentary}
+          onConsumed={() => setCommentary(null)}
+        />
       </div>
 
       {/* Over strip */}
