@@ -202,7 +202,14 @@ export async function recordBall(
   }
 
   if (batsmanDismissed) {
+    // The dismissed batsman was the striker — surviving batsman becomes striker
     newStrikerId = newNonStrikerId;
+    newNonStrikerId = '';
+  }
+
+  // If run-out dismisses the non-striker, the original striker stays as striker
+  if (isWicket && wicketType === 'RUN_OUT' && dismissedPlayerId === innings.nonStrikerId) {
+    newStrikerId = innings.strikerId!;
     newNonStrikerId = '';
   }
 
@@ -223,12 +230,30 @@ export async function recordBall(
     },
   });
 
-  // 7. Check completion
+  // 6b. Check innings completion and persist isCompleted on the innings record
   const match = innings.match;
   const isInningsComplete =
     newWickets >= match.maxWickets ||
     (newCompletedOvers >= match.totalOvers && newCurrentBalls === 0) ||
     (innings.inningsNumber === 2 && innings.target != null && newRuns >= innings.target);
+
+  if (isInningsComplete) {
+    await db.innings.update({
+      where: { id: inningsId },
+      data: { isCompleted: true },
+    });
+  }
+
+  // 6c. Update match.currentInnings if this is the 2nd innings starting
+  if (innings.inningsNumber === 2 && match.currentInnings !== 2) {
+    await db.match.update({
+      where: { id: match.id },
+      data: { currentInnings: 2 },
+    });
+  }
+
+  // 7. Update partnership tracking (using already-computed isInningsComplete from step 6b)
+  // match is already available from innings.match
 
   // 8. Update partnership tracking
   await updatePartnershipOnBall(inningsId, {

@@ -54,11 +54,12 @@ export async function POST(
       }
     }
 
-    // Update match to LIVE and set current innings
+    // Update match to reflect innings creation, but keep status as SETUP/TOSS
+    // The match should only go LIVE when the first ball is actually recorded
+    // If the match already has a liveCode, keep it; otherwise don't generate one yet
     await db.match.update({
       where: { id },
       data: {
-        status: 'LIVE',
         currentInnings: inningsNumber,
         ...(liveCode && { liveCode }),
       },

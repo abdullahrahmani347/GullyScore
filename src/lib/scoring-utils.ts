@@ -69,19 +69,31 @@ export function generateResultString(
   totalOvers: number,
   maxWickets: number
 ): string {
-  if (inn2Runs >= inn1Runs + 1) {
+  if (inn2Runs > inn1Runs) {
+    // Chasing team won
     const wicketsRemaining = maxWickets - inn2Wickets;
     const ballsUsed = inn2Overs * 6 + inn2CurrentBalls;
     const ballsTotal = totalOvers * 6;
     const ballsRemaining = ballsTotal - ballsUsed;
+    const allOut = inn2Wickets >= maxWickets;
+    if (allOut) {
+      return `${chasingTeamName} won by ${inn2Runs - inn1Runs} run${inn2Runs - inn1Runs !== 1 ? 's' : ''} (all out)`;
+    }
     if (ballsRemaining > 0) {
-      return `${chasingTeamName} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''} (${ballsRemaining} balls remaining)`;
+      return `${chasingTeamName} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''} (${ballsRemaining} ball${ballsRemaining !== 1 ? 's' : ''} remaining)`;
     }
     return `${chasingTeamName} won by ${wicketsRemaining} wicket${wicketsRemaining !== 1 ? 's' : ''}`;
   }
-  if (inn2Runs < inn1Runs + 1) {
-    return `${battingFirstTeamName} won by ${inn1Runs - inn2Runs} run${inn1Runs - inn2Runs !== 1 ? 's' : ''}`;
+  if (inn2Runs < inn1Runs) {
+    // Batting first team won
+    const runMargin = inn1Runs - inn2Runs;
+    const allOut = inn2Wickets >= maxWickets;
+    if (allOut) {
+      return `${battingFirstTeamName} won by ${runMargin} run${runMargin !== 1 ? 's' : ''}`;
+    }
+    return `${battingFirstTeamName} won by ${runMargin} run${runMargin !== 1 ? 's' : ''} (${maxWickets - inn2Wickets} wickets in hand)`;
   }
+  // Tied match
   return `Match tied — both teams scored ${inn1Runs}`;
 }
 

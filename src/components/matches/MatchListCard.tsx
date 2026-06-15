@@ -148,9 +148,14 @@ export function MatchListCard({ match, index, onAbandon, onDelete }: MatchListCa
           </div>
         </div>
 
-        {/* Result */}
-        {(isCompleted || isAbandoned) && match.result && (
-          <p className={`text-xs font-medium mt-2 pt-2 border-t border-border truncate ${isAbandoned ? 'text-orange-400' : 'text-accent'}`}>
+        {/* Result — only show for completed/abandoned matches with a result */}
+        {isCompleted && match.result && (
+          <p className="text-xs font-medium mt-2 pt-2 border-t border-border truncate text-accent">
+            {match.result}
+          </p>
+        )}
+        {isAbandoned && match.result && (
+          <p className="text-xs font-medium mt-2 pt-2 border-t border-border truncate text-orange-400">
             {match.result}
           </p>
         )}

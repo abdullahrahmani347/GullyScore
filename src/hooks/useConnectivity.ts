@@ -46,7 +46,8 @@ export function useOfflineSync(matchId?: string) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncEvent, setLastSyncEvent] = useState<SyncEngineEvent | null>(null);
   const [failedItems, setFailedItems] = useState<OfflineQueueItem[]>([]);
-  const refreshRef = useRef<() => void>();
+  const refreshRef = useRef<() => void>(undefined as unknown as () => void);
+  const subscribedRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -74,23 +75,28 @@ export function useOfflineSync(matchId?: string) {
     // Initial load
     refreshRef.current?.();
 
-    // Subscribe to sync engine events
+    // Subscribe to sync engine events — guard against duplicate subscriptions
+    // during rapid remounts (e.g., navigating away and back)
     let unsubscribe: (() => void) | undefined;
 
-    import('@/lib/offline/sync-engine').then(({ getSyncEngine }) => {
-      const engine = getSyncEngine();
-      unsubscribe = engine.subscribe((event) => {
-        setLastSyncEvent(event);
-        setIsSyncing(event.type === 'sync_start' || event.type === 'sync_progress');
+    if (!subscribedRef.current) {
+      subscribedRef.current = true;
+      import('@/lib/offline/sync-engine').then(({ getSyncEngine }) => {
+        const engine = getSyncEngine();
+        unsubscribe = engine.subscribe((event) => {
+          setLastSyncEvent(event);
+          setIsSyncing(event.type === 'sync_start' || event.type === 'sync_progress');
 
-        // Refresh queue stats after any sync event
-        if (event.type === 'sync_complete' || event.type === 'sync_error' || event.type === 'item_failed') {
-          refreshRef.current?.();
-        }
+          // Refresh queue stats after any sync event
+          if (event.type === 'sync_complete' || event.type === 'sync_error' || event.type === 'item_failed') {
+            refreshRef.current?.();
+          }
+        });
+      }).catch(() => {
+        // Server-side guard — ignore
+        subscribedRef.current = false;
       });
-    }).catch(() => {
-      // Server-side guard — ignore
-    });
+    }
 
     // Poll queue stats periodically
     const interval = setInterval(() => {
@@ -99,6 +105,7 @@ export function useOfflineSync(matchId?: string) {
 
     return () => {
       unsubscribe?.();
+      subscribedRef.current = false;
       clearInterval(interval);
     };
   }, []);

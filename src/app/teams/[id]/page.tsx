@@ -351,13 +351,14 @@ export default function TeamDetailPage() {
   const router = useRouter();
   const teamId = params.id as string;
 
-  const { data: team, isLoading, isError, mutate } = useSWR<TeamDetail>(
+  const { data: team, isLoading, error: teamError, mutate } = useSWR<TeamDetail>(
     `/api/teams/${teamId}`,
     fetcher,
     {
       revalidateOnFocus: false,
     }
   );
+  const isError = !!teamError;
 
   // Edit sheet
   const [showEditForm, setShowEditForm] = useState(false);
@@ -574,12 +575,18 @@ export default function TeamDetailPage() {
   // --- Prepare initial data for TeamForm (include player IDs) ---
 
   const teamFormInitialData = {
-    ...team,
+    id: team.id,
+    name: team.name,
+    shortName: team.shortName,
+    color: team.color,
+    emoji: team.emoji,
     players: team.players.map((p) => ({
       id: p.id,
       name: p.name,
+      teamId: team.id,
       jerseyNumber: p.jerseyNumber,
     })),
+    createdAt: team.createdAt,
   };
 
   return (

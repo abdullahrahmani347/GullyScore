@@ -225,6 +225,6 @@ export interface MatchStoreState {
   setBowler: (bowlerId: string) => void;
   setState: (state: ScoringState) => void;
   setSubmitting: (v: boolean) => void;
-  setLastBallResult: (result: RecordBallResponse) => void;
+  setLastBallResult: (result: RecordBallResponse | null) => void;
   reset: () => void;
 }

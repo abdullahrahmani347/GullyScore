@@ -32,6 +32,43 @@
 html { background: var(--color-bg-app); color: var(--color-t1); }
 body { background: var(--color-bg-app); min-height: 100dvh; }
 
+/* ── AMOLED Dark Theme (true black) ── */
+[data-theme="amoled"],
+.amoled {
+  --color-bg-app: #000000;
+  --color-bg-card: #0A0A0A;
+  --color-bg-elevated: #111111;
+  --color-bg-input: #141414;
+  --color-bg-glass: rgba(255,255,255,0.02);
+  --color-border: rgba(255,255,255,0.05);
+  --color-border-act: rgba(0,212,170,0.30);
+  --color-shadow-card: 0 4px 24px rgba(0,0,0,0.9);
+  --color-shadow-glow: 0 0 24px rgba(0,212,170,0.20);
+}
+
+/* ── Light Theme ── */
+[data-theme="light"],
+.light {
+  --color-bg-app: #F5F5FA;
+  --color-bg-card: #FFFFFF;
+  --color-bg-elevated: #EDEDF4;
+  --color-bg-input: #E5E5EF;
+  --color-bg-glass: rgba(0,0,0,0.03);
+  --color-t1: #1A1A2E;
+  --color-t2: #5A5A72;
+  --color-t3: #9090A8;
+  --color-border: rgba(0,0,0,0.08);
+  --color-border-act: rgba(0,180,140,0.35);
+  --color-accent: #00B88C;
+  --color-accent-dim: rgba(0,184,140,0.10);
+  --color-run-4-bg: rgba(78,205,196,0.08);
+  --color-run-6-bg: rgba(255,107,53,0.08);
+  --color-wicket-bg: rgba(255,68,68,0.08);
+  --color-dot: #B0B0C0;
+  --color-shadow-card: 0 4px 24px rgba(0,0,0,0.06);
+  --color-shadow-glow: 0 0 24px rgba(0,184,140,0.12);
+}
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
@@ -71,7 +108,7 @@ body { background: var(--color-bg-app); min-height: 100dvh; }
   -webkit-overflow-scrolling: touch;
 }
 
-/* Dialog/Sheet overrides for dark theme */
+/* Dialog/Sheet overrides for theme */
 [data-slot="dialog-content"] {
   background: var(--color-bg-card) !important;
   border-color: var(--color-border) !important;

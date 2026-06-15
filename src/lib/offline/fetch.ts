@@ -76,10 +76,12 @@ export async function offlineFetch<T = any>(
   // If online, try the network request normally
   if (isOnline()) {
     try {
-      // Add device ID header for data isolation
+      // Add device ID header for data isolation — use canonical getDeviceId()
       const headers = new Headers(fetchOptions.headers);
       if (typeof window !== 'undefined') {
-        const deviceId = localStorage.getItem('gullyscore-device-id');
+        // Dynamic import to avoid SSR issues; getDeviceId is synchronous at runtime
+        const { getDeviceId } = require('@/lib/device');
+        const deviceId = getDeviceId();
         if (deviceId) {
           headers.set('X-Device-Id', deviceId);
         }

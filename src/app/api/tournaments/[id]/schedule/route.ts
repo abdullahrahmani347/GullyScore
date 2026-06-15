@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,12 @@ export async function GET(
 
     if (!tournament) {
       return NextResponse.json({ error: 'Tournament not found' }, { status: 404 });
+    }
+
+    // Verify device ownership
+    const ownership = verifyOwnership(request, tournament.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
     }
 
     const matches = await db.match.findMany({

@@ -105,7 +105,7 @@ export async function enqueueRequest(item: Omit<OfflineQueueItem, 'id' | 'retryC
 
   await logSyncEvent('sync_start', `Queued ${item.type} request for offline sync`);
 
-  return id;
+  return id as number;
 }
 
 /**

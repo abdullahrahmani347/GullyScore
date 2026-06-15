@@ -32,11 +32,12 @@ const FILTERS: { label: string; value: MatchStatus | 'ALL' }[] = [
 export default function MatchesPage() {
   const [filter, setFilter] = useState<MatchStatus | 'ALL'>('ALL');
 
-  const { data: matches, isLoading, isError, mutate } = useSWR<MatchData[]>(
+  const { data: matches, isLoading, error, mutate } = useSWR<MatchData[]>(
     `/api/matches${filter !== 'ALL' ? `?status=${filter}` : ''}`,
     safeDeviceFetcher,
     { refreshInterval: 10000 }
   );
+  const isError = !!error;
 
   // Confirmation dialog state
   const [confirmDialog, setConfirmDialog] = useState<{

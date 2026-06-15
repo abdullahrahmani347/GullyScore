@@ -51,7 +51,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
-import type { Tournament, TournamentFormat, TournamentStatus } from '@/types';
+import type { Tournament, TournamentFormat, TournamentStatus, TournamentTeamStat, MatchData } from '@/types';
 
 const fetcher = safeDeviceFetcher;
 
@@ -91,30 +91,44 @@ export default function TournamentDetailPage() {
   const {
     data: tournament,
     isLoading,
-    isError: isTournamentError,
+    error: tournamentError,
     mutate: mutateTournament,
   } = useSWR<Tournament>(
     `/api/tournaments/${tournamentId}`,
     fetcher
   );
+  const isTournamentError = !!tournamentError;
 
   const {
     data: pointsData,
-    isError: isPointsError,
+    error: pointsError,
     mutate: mutatePoints,
-  } = useSWR(
+  } = useSWR<{
+    tournamentId: string;
+    tournamentName: string;
+    format: string;
+    pointsTable: TournamentTeamStat[];
+  }>(
     tournament ? `/api/tournaments/${tournamentId}/points-table` : null,
     fetcher
   );
+  const isPointsError = !!pointsError;
 
   const {
     data: scheduleData,
-    isError: isScheduleError,
+    error: scheduleError,
     mutate: mutateSchedule,
-  } = useSWR(
+  } = useSWR<{
+    tournamentId: string;
+    tournamentName: string;
+    totalMatches: number;
+    completedMatches: number;
+    schedule: MatchData[];
+  }>(
     tournament ? `/api/tournaments/${tournamentId}/schedule` : null,
     fetcher
   );
+  const isScheduleError = !!scheduleError;
 
   // Edit sheet state
   const [showEditForm, setShowEditForm] = useState(false);

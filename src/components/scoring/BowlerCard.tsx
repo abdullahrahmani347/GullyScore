@@ -22,9 +22,16 @@ export function BowlerCard({ currentInnings }: BowlerCardProps) {
     );
   }
 
-  // Calculate this over's runs
-  const currentOverBalls = currentInnings.balls.filter(
+  // Calculate this over's runs — use the current over context
+  // If the over just completed (currentBalls === 0 and balls exist for completed over),
+  // show the completed over's data until new balls are recorded in the new over
+  const justCompletedOverBalls = currentInnings.balls.filter(
     (b) => b.overNumber === currentInnings.completedOvers && b.bowlerId === currentBowlerId
+  );
+  const isOverJustCompleted = currentInnings.currentBalls === 0 && justCompletedOverBalls.length === 6;
+  const displayOverNumber = isOverJustCompleted ? currentInnings.completedOvers - 1 : currentInnings.completedOvers;
+  const currentOverBalls = currentInnings.balls.filter(
+    (b) => b.overNumber === displayOverNumber && b.bowlerId === currentBowlerId
   );
   const thisOverRuns = currentOverBalls.reduce((acc, b) => {
     if (b.extraType === 'BYE' || b.extraType === 'LEG_BYE') return acc;

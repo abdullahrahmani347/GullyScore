@@ -84,8 +84,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     const newCompletedOvers = optimisticInnings.completedOvers + (isOverComplete ? 1 : 0);
 
     // Calculate optimistic striker change
-    let newStrikerId = store.strikerId;
-    let newNonStrikerId = store.nonStrikerId;
+    let newStrikerId: string | null = store.strikerId;
+    let newNonStrikerId: string | null = store.nonStrikerId;
     if (isLegalDelivery) {
       if (runs % 2 === 1) {
         [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
@@ -364,6 +364,14 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         toast.info('Innings completed — saved offline', { duration: 2000 });
       } else {
         await mutate();
+      }
+
+      // Transition state machine to INNINGS_BREAK if not already there
+      // This ensures the state machine stays consistent even when called
+      // from outside the InningsBreakScreen context (e.g., recovery flow)
+      const currentState = useMatchStore.getState().currentState;
+      if (currentState !== 'INNINGS_BREAK' && currentState !== 'MATCH_RESULT') {
+        useMatchStore.getState().setState('INNINGS_BREAK');
       }
     } catch {
       toast.error('Failed to complete innings');

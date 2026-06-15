@@ -55,6 +55,27 @@ export async function POST(
       extraRuns: extraRuns || 0,
     });
 
+    // Transition match to LIVE on the first ball recorded
+    // (match stays in TOSS/UPCOMING until actual play begins)
+    if (match.status !== 'LIVE' && match.status !== 'COMPLETED' && match.status !== 'ABANDONED') {
+      const updateData: Record<string, unknown> = { status: 'LIVE' };
+      // Generate a liveCode if the match doesn't have one
+      if (!match.liveCode) {
+        const { generateLiveCode } = await import('@/lib/live-emitter');
+        let attempts = 0;
+        while (attempts < 10) {
+          const code = generateLiveCode();
+          const existing = await db.match.findUnique({ where: { liveCode: code } });
+          if (!existing) {
+            updateData.liveCode = code;
+            break;
+          }
+          attempts++;
+        }
+      }
+      await db.match.update({ where: { id }, data: updateData });
+    }
+
     // Emit SSE event for spectators
     const eventType = result.ball.isWicket ? 'wicket' : 'ball';
     emitLiveEvent(id, {

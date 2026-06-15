@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useMatchStore } from '@/store/matchStore';
 import { useScoringHandlers } from '@/hooks/useScoringHandlers';
 import { ScoreDisplay } from './ScoreDisplay';
@@ -147,7 +147,7 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   const lastCommentedBallId = useRef<string | null>(null);
 
   // Effect: when lastBallResult changes, generate commentary
-  useMemo(() => {
+  useEffect(() => {
     if (!lastBallResult?.ball || !currentInnings || !match) return;
     if (lastBallResult.ball.id === lastCommentedBallId.current) return;
     lastCommentedBallId.current = lastBallResult.ball.id;

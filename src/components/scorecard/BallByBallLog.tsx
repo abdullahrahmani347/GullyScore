@@ -11,7 +11,11 @@ function getBallDisplay(ball: BallRecord): { label: string; color: string; bg: s
     return { label: 'W', color: 'text-white', bg: 'bg-wicket' };
   }
   if (ball.extraType === 'WIDE') {
-    return { label: `Wd${ball.extraRuns > 1 ? ball.extraRuns : ''}`, color: 'text-t1', bg: 'bg-bg-elevated' };
+    // For wides: extraRuns includes the +1 penalty. Show as Wd for standard wide,
+    // or Wd+N where N = extraRuns beyond the penalty (overthrows)
+    const overthrows = ball.extraRuns - 1;
+    const label = overthrows > 0 ? `Wd+${overthrows}` : 'Wd';
+    return { label, color: 'text-t1', bg: 'bg-bg-elevated' };
   }
   if (ball.extraType === 'NO_BALL') {
     return { label: `Nb${ball.extraRuns > 1 ? ball.extraRuns : ''}`, color: 'text-t1', bg: 'bg-bg-elevated' };

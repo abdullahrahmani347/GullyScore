@@ -13,8 +13,22 @@ import { toast } from 'sonner';
 import { formatOvers } from '@/lib/scoring-utils';
 import { format } from 'date-fns';
 
+import type { MatchData } from '@/types';
+
+interface ScorecardInningsExtras {
+  wides: number;
+  noBalls: number;
+  byes: number;
+  legByes: number;
+  total: number;
+}
+
 interface ScorecardViewProps {
-  match: any;
+  match: MatchData & {
+    innings?: (MatchData['innings'][number] & {
+      extras?: ScorecardInningsExtras;
+    })[];
+  };
 }
 
 function ScorecardView({ match }: ScorecardViewProps) {

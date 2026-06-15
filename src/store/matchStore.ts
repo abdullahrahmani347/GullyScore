@@ -39,7 +39,7 @@ export const useMatchStore = create<MatchStoreState>()(
       setBowler: (bowlerId: string) => set({ currentBowlerId: bowlerId }),
       setState: (state: ScoringState) => set({ currentState: state }),
       setSubmitting: (v: boolean) => set({ isSubmitting: v }),
-      setLastBallResult: (result: RecordBallResponse) => set({ lastBallResult: result }),
+      setLastBallResult: (result: RecordBallResponse | null) => set({ lastBallResult: result }),
       reset: () => set({
         currentState: 'SETUP_OPENER_1',
         match: null,

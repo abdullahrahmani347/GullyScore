@@ -7,13 +7,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { safeDeviceFetcher } from '@/lib/device';
+import type { MatchData } from '@/types';
+
+interface ScorecardInningsExtras {
+  wides: number;
+  noBalls: number;
+  byes: number;
+  legByes: number;
+  total: number;
+}
+
+type ScorecardMatch = MatchData & {
+  innings: (MatchData['innings'][number] & {
+    extras?: ScorecardInningsExtras;
+  })[];
+};
 
 const fetcher = safeDeviceFetcher;
 
 export default function ScorecardPage() {
   const params = useParams();
   const matchId = params.id as string;
-  const { data: match, isLoading } = useSWR(
+  const { data: match, isLoading } = useSWR<ScorecardMatch>(
     `/api/matches/${matchId}/scorecard`,
     fetcher
   );

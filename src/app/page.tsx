@@ -2,7 +2,7 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Plus, Zap, AlertTriangle, RefreshCw, Sun, Moon } from 'lucide-react';
+import { Plus, Zap, AlertTriangle, RefreshCw, Sun, Moon, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -26,12 +26,10 @@ interface DashboardStats {
 function ThemeToggle() {
   const { theme, setTheme } = useSettingsStore();
 
+  // Cycle: dark → amoled → light → dark
   const toggleTheme = () => {
-    setTheme(theme === 'dark' ? 'light' : 'dark');
-    if (typeof document !== 'undefined') {
-      document.documentElement.classList.toggle('dark', theme !== 'dark');
-      document.documentElement.classList.toggle('light', theme === 'dark');
-    }
+    const next: typeof theme = theme === 'dark' ? 'amoled' : theme === 'amoled' ? 'light' : 'dark';
+    setTheme(next);
   };
 
   return (
@@ -40,17 +38,18 @@ function ThemeToggle() {
       size="icon"
       onClick={toggleTheme}
       className="h-9 w-9 rounded-xl text-t2 hover:text-t1 hover:bg-bg-card flex-shrink-0"
-      aria-label="Toggle theme"
+      aria-label={`Current theme: ${theme}. Click to switch.`}
     >
-      {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      {theme === 'dark' ? <Moon size={18} /> : theme === 'amoled' ? <Smartphone size={18} /> : <Sun size={18} />}
     </Button>
   );
 }
 
 export default function DashboardPage() {
-  const { data, isLoading, isError, mutate } = useSWR<DashboardStats>('/api/stats', safeDeviceFetcher, {
+  const { data, isLoading, error, mutate } = useSWR<DashboardStats>('/api/stats', safeDeviceFetcher, {
     refreshInterval: 10000,
   });
+  const isError = !!error;
 
   const hasLiveMatches = data?.liveMatches && data.liveMatches.length > 0;
 

@@ -23,10 +23,11 @@ import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Tournament } from '@/types';
 
 export default function TournamentsPage() {
-  const { data: tournaments, isLoading, isError, mutate } = useSWR<Tournament[]>(
+  const { data: tournaments, isLoading, error: tournamentsError, mutate } = useSWR<Tournament[]>(
     '/api/tournaments',
     safeDeviceFetcher
   );
+  const isError = !!tournamentsError;
 
   const [deleteTarget, setDeleteTarget] = useState<Tournament | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);

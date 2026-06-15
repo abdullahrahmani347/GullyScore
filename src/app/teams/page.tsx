@@ -17,7 +17,8 @@ import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Team } from '@/types';
 
 export default function TeamsPage() {
-  const { data: teams, isLoading, isError, mutate } = useSWR<Team[]>('/api/teams', safeDeviceFetcher);
+  const { data: teams, isLoading, error: teamsError, mutate } = useSWR<Team[]>('/api/teams', safeDeviceFetcher);
+  const isError = !!teamsError;
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);

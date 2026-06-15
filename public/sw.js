@@ -11,7 +11,7 @@
  * retry logic, and recovery UI.
  */
 
-var CACHE_VERSION = 'gullyscore-v1';
+var CACHE_VERSION = 'gullyscore-v2';
 var STATIC_CACHE = CACHE_VERSION + '-static';
 var API_CACHE = CACHE_VERSION + '-api';
 
@@ -45,16 +45,21 @@ var SSE_PATTERNS = [
   /\/api\/live\//i,
 ];
 
-// Install event — pre-cache critical assets
+// Install event — pre-cache critical assets and app pages
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(function(cache) {
-      // Pre-cache the app shell
+      // Pre-cache the app shell and critical pages for offline use
       return cache.addAll([
         '/',
+        '/matches',
+        '/teams',
+        '/tournaments',
+        '/matches/new',
         '/manifest.json',
         '/icons/icon-192.png',
         '/icons/icon-512.png',
+        '/logo.svg',
       ]).catch(function() {
         // Silently fail if assets aren't available yet (first build)
         console.log('[SW] Some pre-cache assets not available yet');

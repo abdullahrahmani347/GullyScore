@@ -7,6 +7,12 @@ export const dynamic = 'force-dynamic';
  * SSE endpoint: /api/matches/[id]/stream
  * Returns text/event-stream with real-time match updates.
  * Also sends initial state on connect so spectators see current score immediately.
+ *
+ * NOTE: This endpoint does NOT verify device ownership. This is intentional —
+ * spectators with a live code should be able to watch the match without
+ * needing the creator's device ID. The live code itself serves as the
+ * access token for spectator viewing. If stricter privacy is needed,
+ * add a liveCode query parameter check here.
  */
 export async function GET(
   request: Request,

@@ -133,8 +133,10 @@ class SyncEngine {
         fetchOptions.body = item.body;
       }
 
-      // Add device ID header for data isolation
-      const deviceId = localStorage.getItem('gullyscore-device-id');
+      // Add device ID header for data isolation — use the canonical getDeviceId()
+      // which generates a UUID if missing, ensuring the header is always present
+      const { getDeviceId } = await import('@/lib/device');
+      const deviceId = getDeviceId();
       if (deviceId) {
         (fetchOptions.headers as Record<string, string>)['X-Device-Id'] = deviceId;
       }

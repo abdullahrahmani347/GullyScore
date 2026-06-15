@@ -99,10 +99,30 @@ export async function updatePartnershipOnBall(
       },
     });
 
-    // After a wicket, one batsman is out and a new one will walk in.
-    // We DON'T create a new partnership here — it gets created
-    // when the next ball is recorded (because we need both batsman IDs).
-    // However, if the innings is complete, there's no next partnership.
+    // If innings is not complete, create a placeholder open partnership
+    // for the new batsman pair. This prevents the "no current partnership"
+    // flicker between wicket and next ball. The pair will be updated
+    // when the new batsman is set via setStriker.
+    if (!isInningsComplete && newStrikerId && newNonStrikerId) {
+      const [nb1, nb2] = pairKey(newStrikerId, newNonStrikerId);
+      // Only create if we have both batsman IDs
+      if (nb1 && nb2) {
+        await db.partnership.create({
+          data: {
+            inningsId,
+            batsman1Id: nb1,
+            batsman2Id: nb2,
+            runs: 0,
+            balls: 0,
+            wicketNumber: 0,
+            openingBallId: ballId,
+            closingBallId: null,
+            isOpen: true,
+          },
+        });
+      }
+    }
+
     return;
   }
 

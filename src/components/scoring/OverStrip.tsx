@@ -13,7 +13,9 @@ function getBallDisplay(ball: BallRecord): { label: string; color: string; bg: s
     return { label: 'W', color: 'text-white', bg: 'bg-wicket' };
   }
   if (ball.extraType === 'WIDE') {
-    return { label: 'Wd', color: 'text-t1', bg: 'bg-bg-elevated' };
+    const overthrows = ball.extraRuns - 1;
+    const label = overthrows > 0 ? `Wd+${overthrows}` : 'Wd';
+    return { label, color: 'text-t1', bg: 'bg-bg-elevated' };
   }
   if (ball.extraType === 'NO_BALL') {
     return { label: 'Nb', color: 'text-t1', bg: 'bg-bg-elevated' };

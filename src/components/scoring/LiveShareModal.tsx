@@ -130,7 +130,7 @@ export function LiveShareModal({ open, onOpenChange, match }: LiveShareModalProp
             </button>
 
             {/* Share (if supported) */}
-            {typeof navigator !== 'undefined' && navigator.share && (
+            {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
               <button
                 onClick={handleShare}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-border text-t2 font-medium text-sm hover:bg-bg-elevated transition-colors"
