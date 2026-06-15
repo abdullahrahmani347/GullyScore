@@ -50,9 +50,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Tournament, TournamentFormat, TournamentStatus } from '@/types';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = safeDeviceFetcher;
 
 type TabKey = 'points' | 'schedule' | 'teams';
 
@@ -156,9 +157,8 @@ export default function TournamentDetailPage() {
 
     setIsUpdating(true);
     try {
-      const res = await fetch(`/api/tournaments/${tournamentId}`, {
+      const res = await deviceFetch(`/api/tournaments/${tournamentId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName.trim(),
           format: editFormat,
@@ -182,7 +182,7 @@ export default function TournamentDetailPage() {
   const handleDeleteTournament = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/tournaments/${tournamentId}`, {
+      const res = await deviceFetch(`/api/tournaments/${tournamentId}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -201,9 +201,8 @@ export default function TournamentDetailPage() {
   const handleStatusTransition = async (newStatus: TournamentStatus) => {
     setIsStatusUpdating(true);
     try {
-      const res = await fetch(`/api/tournaments/${tournamentId}`, {
+      const res = await deviceFetch(`/api/tournaments/${tournamentId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
       if (!res.ok) {

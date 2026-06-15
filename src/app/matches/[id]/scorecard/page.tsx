@@ -6,8 +6,9 @@ import { ScorecardView } from '@/components/scorecard/ScorecardView';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ArrowLeft, Share2 } from 'lucide-react';
 import Link from 'next/link';
+import { safeDeviceFetcher } from '@/lib/device';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = safeDeviceFetcher;
 
 export default function ScorecardPage() {
   const params = useParams();

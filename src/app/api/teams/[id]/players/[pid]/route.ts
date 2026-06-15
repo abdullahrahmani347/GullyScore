@@ -1,12 +1,25 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; pid: string }> }
 ) {
   try {
-    const { pid } = await params;
+    const { id, pid } = await params;
+
+    // Verify team ownership
+    const team = await db.team.findUnique({ where: { id } });
+    if (!team) {
+      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, team.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     const body = await request.json();
     const { name, jerseyNumber } = body;
 
@@ -30,7 +43,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; pid: string }> }
 ) {
   try {
-    const { pid } = await params;
+    const { id, pid } = await params;
+
+    // Verify team ownership
+    const team = await db.team.findUnique({ where: { id } });
+    if (!team) {
+      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, team.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
 
     // Check if player has match history
     const hasBattingPerf = await db.batsmanInnings.count({ where: { playerId: pid } });

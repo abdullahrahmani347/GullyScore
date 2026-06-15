@@ -1,12 +1,25 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; iid: string }> }
 ) {
   try {
-    const { iid } = await params;
+    const { id, iid } = await params;
+
+    // Verify match ownership
+    const match = await db.match.findUnique({ where: { id } });
+    if (!match) {
+      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     const body = await request.json();
     const { bowlerId } = body;
 

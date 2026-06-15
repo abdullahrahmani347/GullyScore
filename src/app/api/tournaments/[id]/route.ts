@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getDeviceIdFromRequest, verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
@@ -33,6 +34,12 @@ export async function GET(
       return NextResponse.json({ error: 'Tournament not found' }, { status: 404 });
     }
 
+    // Verify ownership
+    const ownership = verifyOwnership(request, tournament.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     return NextResponse.json(tournament);
   } catch (error) {
     console.error('Error fetching tournament:', error);
@@ -46,13 +53,20 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const body = await request.json();
-    const { name, format, totalOvers, status } = body;
 
-    const tournament = await db.tournament.findUnique({ where: { id } });
-    if (!tournament) {
+    // Check ownership first
+    const existingTournament = await db.tournament.findUnique({ where: { id } });
+    if (!existingTournament) {
       return NextResponse.json({ error: 'Tournament not found' }, { status: 404 });
     }
+
+    const ownership = verifyOwnership(request, existingTournament.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
+    const body = await request.json();
+    const { name, format, totalOvers, status } = body;
 
     // Validate status transition
     if (status) {
@@ -61,9 +75,9 @@ export async function PUT(
         'ONGOING': ['COMPLETED'],
         'COMPLETED': [],
       };
-      if (!validTransitions[tournament.status]?.includes(status)) {
+      if (!validTransitions[existingTournament.status]?.includes(status)) {
         return NextResponse.json(
-          { error: `Cannot transition from ${tournament.status} to ${status}` },
+          { error: `Cannot transition from ${existingTournament.status} to ${status}` },
           { status: 400 }
         );
       }
@@ -102,9 +116,16 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const tournament = await db.tournament.findUnique({ where: { id } });
-    if (!tournament) {
+
+    // Check ownership first
+    const existingTournament = await db.tournament.findUnique({ where: { id } });
+    if (!existingTournament) {
       return NextResponse.json({ error: 'Tournament not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, existingTournament.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
     }
 
     // Check for live matches

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function POST(
   request: NextRequest,
@@ -7,17 +8,23 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+
+    // Verify team ownership before adding players
+    const team = await db.team.findUnique({ where: { id } });
+    if (!team) {
+      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, team.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     const body = await request.json();
     const { name, jerseyNumber } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Player name is required' }, { status: 400 });
-    }
-
-    // Verify team exists
-    const team = await db.team.findUnique({ where: { id } });
-    if (!team) {
-      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     }
 
     const player = await db.player.create({

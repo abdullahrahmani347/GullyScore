@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateLiveCode } from '@/lib/live-emitter';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function POST(
   request: NextRequest,
@@ -21,6 +22,12 @@ export async function POST(
     const match = await db.match.findUnique({ where: { id } });
     if (!match) {
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
     }
 
     const innings = await db.innings.create({

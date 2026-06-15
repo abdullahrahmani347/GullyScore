@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getDeviceIdFromRequest } from '@/lib/api-auth';
 
 const inningsInclude = {
   team: { include: { players: true } },
@@ -15,9 +16,16 @@ export async function GET(request: NextRequest) {
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
 
+    // Get deviceId from request header for filtering
+    const deviceId = getDeviceIdFromRequest(request);
+
     const where: Record<string, unknown> = {};
     if (status) {
       where.status = status;
+    }
+    // Filter by deviceId - only show matches belonging to this device
+    if (deviceId) {
+      where.deviceId = deviceId;
     }
 
     const matches = await db.match.findMany({
@@ -57,6 +65,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get deviceId from request header
+    const deviceId = getDeviceIdFromRequest(request);
+    if (!deviceId) {
+      return NextResponse.json(
+        { error: 'Device identification required. Please refresh the page.' },
+        { status: 401 }
+      );
+    }
+
+    // Verify teams belong to this device
+    const team1 = await db.team.findUnique({ where: { id: team1Id } });
+    const team2 = await db.team.findUnique({ where: { id: team2Id } });
+
+    if (!team1 || (team1.deviceId && team1.deviceId !== deviceId)) {
+      return NextResponse.json(
+        { error: 'Team 1 not found or does not belong to this device.' },
+        { status: 403 }
+      );
+    }
+    if (!team2 || (team2.deviceId && team2.deviceId !== deviceId)) {
+      return NextResponse.json(
+        { error: 'Team 2 not found or does not belong to this device.' },
+        { status: 403 }
+      );
+    }
+
     const match = await db.match.create({
       data: {
         team1Id,
@@ -65,6 +99,7 @@ export async function POST(request: NextRequest) {
         maxWickets: maxWickets || 10,
         venue: venue || null,
         tournamentId: tournamentId || null,
+        deviceId,
       },
       include: {
         team1: { include: { players: true } },

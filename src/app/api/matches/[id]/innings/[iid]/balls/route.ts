@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordBall } from '@/lib/scoring-engine';
 import { emitLiveEvent } from '@/lib/live-emitter';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
+import { db } from '@/lib/db';
 
 export async function POST(
   request: NextRequest,
@@ -8,6 +10,18 @@ export async function POST(
 ) {
   try {
     const { id, iid } = await params;
+
+    // Verify match ownership before recording ball
+    const match = await db.match.findUnique({ where: { id } });
+    if (!match) {
+      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     const body = await request.json();
 
     const {

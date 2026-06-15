@@ -133,6 +133,12 @@ class SyncEngine {
         fetchOptions.body = item.body;
       }
 
+      // Add device ID header for data isolation
+      const deviceId = localStorage.getItem('gullyscore-device-id');
+      if (deviceId) {
+        (fetchOptions.headers as Record<string, string>)['X-Device-Id'] = deviceId;
+      }
+
       const response = await fetch(item.url, fetchOptions);
 
       if (response.ok) {

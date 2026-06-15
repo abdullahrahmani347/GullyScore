@@ -1,10 +1,21 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateRoundRobinSchedule } from '@/lib/scoring-utils';
+import { getDeviceIdFromRequest } from '@/lib/api-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Get deviceId from request header for filtering
+    const deviceId = getDeviceIdFromRequest(request);
+
+    const where: Record<string, unknown> = {};
+    // Filter by deviceId - only show tournaments belonging to this device
+    if (deviceId) {
+      where.deviceId = deviceId;
+    }
+
     const tournaments = await db.tournament.findMany({
+      where,
       include: {
         teams: { include: { team: true } },
         matches: {
@@ -42,12 +53,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get deviceId from request header
+    const deviceId = getDeviceIdFromRequest(request);
+    if (!deviceId) {
+      return NextResponse.json(
+        { error: 'Device identification required. Please refresh the page.' },
+        { status: 401 }
+      );
+    }
+
+    // Verify all teams belong to this device
+    for (const teamId of teamIds) {
+      const team = await db.team.findUnique({ where: { id: teamId } });
+      if (!team || (team.deviceId && team.deviceId !== deviceId)) {
+        return NextResponse.json(
+          { error: `Team not found or does not belong to this device.` },
+          { status: 403 }
+        );
+      }
+    }
+
     // Create tournament with teams
     const tournament = await db.tournament.create({
       data: {
         name,
         format,
         totalOvers: totalOvers || 10,
+        deviceId,
         teams: {
           create: teamIds.map((teamId: string) => ({
             teamId,
@@ -71,6 +103,7 @@ export async function POST(request: NextRequest) {
             team2Id,
             totalOvers: tournament.totalOvers,
             tournamentId: tournament.id,
+            deviceId,
           },
         });
       }

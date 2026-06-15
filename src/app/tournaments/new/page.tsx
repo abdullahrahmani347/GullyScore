@@ -10,13 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { toast } from 'sonner';
+import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Team, TournamentFormat } from '@/types';
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function NewTournamentPage() {
   const router = useRouter();
-  const { data: teams, isLoading } = useSWR<Team[]>('/api/teams', fetcher);
+  const { data: teams, isLoading } = useSWR<Team[]>('/api/teams', safeDeviceFetcher);
 
   const [name, setName] = useState('');
   const [format, setFormat] = useState<TournamentFormat>('ROUND_ROBIN');
@@ -48,9 +47,8 @@ export default function NewTournamentPage() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/tournaments', {
+      const res = await deviceFetch('/api/tournaments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
           format,

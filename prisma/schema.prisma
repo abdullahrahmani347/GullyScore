@@ -13,6 +13,7 @@ model Team {
   shortName String
   color     String   @default("#00D4AA")
   emoji     String   @default("🏏")
+  deviceId  String   @default("")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -54,6 +55,7 @@ model Match {
   venue          String?
   tournamentId   String?
   liveCode       String?       @unique
+  deviceId       String        @default("")
   createdAt      DateTime      @default(now())
   completedAt    DateTime?
 
@@ -207,6 +209,7 @@ model Tournament {
   format     TournamentFormat @default(ROUND_ROBIN)
   totalOvers Int              @default(10)
   status     TournamentStatus @default(UPCOMING)
+  deviceId   String           @default("")
   createdAt  DateTime         @default(now())
 
   teams   TournamentTeam[]

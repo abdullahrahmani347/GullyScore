@@ -2,7 +2,7 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Plus, Zap, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Plus, Zap, AlertTriangle, RefreshCw, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -10,6 +10,8 @@ import { QuickStats } from '@/components/dashboard/QuickStats';
 import { LiveMatchBanner } from '@/components/dashboard/LiveMatchBanner';
 import { RecentMatchCard } from '@/components/dashboard/RecentMatchCard';
 import { ActiveTournamentCard } from '@/components/dashboard/ActiveTournamentCard';
+import { safeDeviceFetcher } from '@/lib/device';
+import { useSettingsStore } from '@/store/settingsStore';
 import type { MatchData, Tournament } from '@/types';
 
 interface DashboardStats {
@@ -21,13 +23,32 @@ interface DashboardStats {
   activeTournaments: Tournament[];
 }
 
-const fetcher = (url: string) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error('Failed to fetch dashboard data');
-  return r.json();
-});
+function ThemeToggle() {
+  const { theme, setTheme } = useSettingsStore();
+
+  const toggleTheme = () => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', theme !== 'dark');
+      document.documentElement.classList.toggle('light', theme === 'dark');
+    }
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleTheme}
+      className="h-9 w-9 rounded-xl text-t2 hover:text-t1 hover:bg-bg-card flex-shrink-0"
+      aria-label="Toggle theme"
+    >
+      {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+    </Button>
+  );
+}
 
 export default function DashboardPage() {
-  const { data, isLoading, isError, mutate } = useSWR<DashboardStats>('/api/stats', fetcher, {
+  const { data, isLoading, isError, mutate } = useSWR<DashboardStats>('/api/stats', safeDeviceFetcher, {
     refreshInterval: 10000,
   });
 
@@ -37,20 +58,24 @@ export default function DashboardPage() {
     return (
       <PageWrapper>
         <div className="px-4 pt-6 pb-4">
-          <div className="flex items-center justify-between">
-            <div>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold text-t1 flex items-center gap-2">
-                <Zap size={24} className="text-accent" />
-                GullyScore
+                <Zap size={24} className="text-accent flex-shrink-0" />
+                <span>GullyScore</span>
               </h1>
               <p className="text-sm text-t2 mt-0.5">Cricket scoring, simplified</p>
             </div>
-            <Link href="/matches/new">
-              <Button className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-10 px-4">
-                <Plus size={18} className="mr-1" />
-                New Match
-              </Button>
-            </Link>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <ThemeToggle />
+              <Link href="/matches/new">
+                <Button className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-9 px-3 text-sm">
+                  <Plus size={16} className="mr-1" />
+                  <span className="hidden xs:inline">New Match</span>
+                  <span className="xs:hidden">New</span>
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
         <div className="px-4">
@@ -74,22 +99,26 @@ export default function DashboardPage() {
 
   return (
     <PageWrapper>
-      {/* Header */}
+      {/* Header - Responsive with theme toggle and new match button */}
       <div className="px-4 pt-6 pb-4">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold text-t1 flex items-center gap-2">
-              <Zap size={24} className="text-accent" />
-              GullyScore
+              <Zap size={24} className="text-accent flex-shrink-0" />
+              <span>GullyScore</span>
             </h1>
             <p className="text-sm text-t2 mt-0.5">Cricket scoring, simplified</p>
           </div>
-          <Link href="/matches/new">
-            <Button className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-10 px-4">
-              <Plus size={18} className="mr-1" />
-              New Match
-            </Button>
-          </Link>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <ThemeToggle />
+            <Link href="/matches/new">
+              <Button className="bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl h-9 px-3 text-sm">
+                <Plus size={16} className="mr-1" />
+                <span className="sm:inline hidden">New Match</span>
+                <span className="sm:hidden">New</span>
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 

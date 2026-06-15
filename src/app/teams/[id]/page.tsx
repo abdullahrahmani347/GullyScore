@@ -42,6 +42,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 
 // --- Types ---
 
@@ -69,10 +70,7 @@ interface TeamDetail {
 
 // --- Fetcher ---
 
-const fetcher = (url: string) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error('Failed to fetch');
-  return r.json();
-});
+const fetcher = safeDeviceFetcher;
 
 // --- Inline Edit Row Component ---
 
@@ -390,9 +388,8 @@ export default function TeamDetailPage() {
   }) => {
     setIsUpdating(true);
     try {
-      const res = await fetch(`/api/teams/${teamId}`, {
+      const res = await deviceFetch(`/api/teams/${teamId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
@@ -414,7 +411,7 @@ export default function TeamDetailPage() {
   const handleDeleteTeam = async () => {
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/teams/${teamId}`, { method: 'DELETE' });
+      const res = await deviceFetch(`/api/teams/${teamId}`, { method: 'DELETE' });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error || 'Failed to delete team');
@@ -454,9 +451,8 @@ export default function TeamDetailPage() {
       );
 
       try {
-        const res = await fetch(`/api/teams/${teamId}/players`, {
+        const res = await deviceFetch(`/api/teams/${teamId}/players`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name,
             jerseyNumber: jerseyNumber ? parseInt(jerseyNumber, 10) : undefined,
@@ -486,9 +482,8 @@ export default function TeamDetailPage() {
     async (playerId: string, name: string, jerseyNumber: string) => {
       setIsSavingPlayer(true);
       try {
-        const res = await fetch(`/api/teams/${teamId}/players/${playerId}`, {
+        const res = await deviceFetch(`/api/teams/${teamId}/players/${playerId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name,
             jerseyNumber: jerseyNumber ? parseInt(jerseyNumber, 10) : null,
@@ -516,7 +511,7 @@ export default function TeamDetailPage() {
     if (!deleteTarget) return;
     setIsDeletingPlayer(true);
     try {
-      const res = await fetch(
+      const res = await deviceFetch(
         `/api/teams/${teamId}/players/${deleteTarget.id}`,
         { method: 'DELETE' }
       );

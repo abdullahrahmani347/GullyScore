@@ -5,12 +5,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MatchCreateForm } from '@/components/matches/MatchCreateForm';
+import { safeDeviceFetcher } from '@/lib/device';
 import type { Team } from '@/types';
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
 export default function NewMatchPage() {
-  const { data: teams, isLoading } = useSWR<Team[]>('/api/teams', fetcher);
+  const { data: teams, isLoading } = useSWR<Team[]>('/api/teams', safeDeviceFetcher);
 
   return (
     <PageWrapper>

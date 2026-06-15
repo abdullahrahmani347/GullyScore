@@ -18,12 +18,8 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
+import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { MatchData, MatchStatus } from '@/types';
-
-const fetcher = (url: string) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error('Failed to fetch matches');
-  return r.json();
-});
 
 const FILTERS: { label: string; value: MatchStatus | 'ALL' }[] = [
   { label: 'All', value: 'ALL' },
@@ -38,7 +34,7 @@ export default function MatchesPage() {
 
   const { data: matches, isLoading, isError, mutate } = useSWR<MatchData[]>(
     `/api/matches${filter !== 'ALL' ? `?status=${filter}` : ''}`,
-    fetcher,
+    safeDeviceFetcher,
     { refreshInterval: 10000 }
   );
 
@@ -82,7 +78,7 @@ export default function MatchesPage() {
           false
         );
 
-        const res = await fetch(`/api/matches/${match.id}`, { method: 'DELETE' });
+        const res = await deviceFetch(`/api/matches/${match.id}`, { method: 'DELETE' });
         const data = await res.json();
 
         if (!res.ok) {
@@ -94,9 +90,8 @@ export default function MatchesPage() {
 
         toast.success('Match deleted');
       } else if (type === 'abandon') {
-        const res = await fetch(`/api/matches/${match.id}`, {
+        const res = await deviceFetch(`/api/matches/${match.id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'ABANDONED', result: 'Match abandoned' }),
         });
         const data = await res.json();

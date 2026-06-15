@@ -10,6 +10,7 @@ import { ScoringScreen } from '@/components/scoring/ScoringScreen';
 import { LiveShareModal } from '@/components/scoring/LiveShareModal';
 import { OfflineIndicator, RecoveryScreen } from '@/components/offline';
 import { useConnectivity, useOfflineSync } from '@/hooks/useConnectivity';
+import { deviceFetcher, deviceFetch } from '@/lib/device';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -22,11 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import type { MatchData } from '@/types';
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error('Failed to fetch');
-    return r.json();
-  });
+const fetcher = deviceFetcher;
 
 /* ─── Error Boundary ─── */
 
@@ -106,9 +103,8 @@ function AbandonMatchButton({ matchId }: { matchId: string }) {
   const handleAbandon = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/matches/${matchId}`, {
+      const res = await deviceFetch(`/api/matches/${matchId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'ABANDONED', result: 'Match abandoned' }),
       });
 

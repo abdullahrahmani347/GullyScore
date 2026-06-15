@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { getDeviceIdFromRequest, verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +17,12 @@ export async function GET(
       return NextResponse.json({ error: 'Team not found' }, { status: 404 });
     }
 
+    // Verify ownership
+    const ownership = verifyOwnership(request, team.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     // Check match history for each player
     const playersWithHistory = await Promise.all(
       team.players.map(async (player) => {
@@ -30,12 +37,17 @@ export async function GET(
     );
 
     // Calculate career stats
+    const deviceId = getDeviceIdFromRequest(request);
+    const matchWhere = {
+      ...(deviceId ? { deviceId } : {}),
+      status: 'COMPLETED' as const,
+    };
     const matchesAsTeam1 = await db.match.findMany({
-      where: { team1Id: id, status: 'COMPLETED' },
+      where: { ...matchWhere, team1Id: id },
       include: { innings: true },
     });
     const matchesAsTeam2 = await db.match.findMany({
-      where: { team2Id: id, status: 'COMPLETED' },
+      where: { ...matchWhere, team2Id: id },
       include: { innings: true },
     });
 
@@ -69,6 +81,18 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+
+    // Check ownership first
+    const existingTeam = await db.team.findUnique({ where: { id } });
+    if (!existingTeam) {
+      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, existingTeam.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     const body = await request.json();
     const { name, shortName, color, emoji, players } = body;
 
@@ -150,6 +174,17 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
+    // Check ownership first
+    const existingTeam = await db.team.findUnique({ where: { id } });
+    if (!existingTeam) {
+      return NextResponse.json({ error: 'Team not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, existingTeam.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
 
     // Check for active matches
     const activeMatches = await db.match.count({

@@ -1,15 +1,22 @@
 import { db } from '@/lib/db';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getDeviceIdFromRequest } from '@/lib/api-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Get deviceId from request header for filtering
+    const deviceId = getDeviceIdFromRequest(request);
+
+    // Build where clause for device-scoped queries
+    const deviceWhere = deviceId ? { deviceId } : {};
+
     const [totalMatches, totalTeams, totalTournaments, liveMatches, recentMatches, activeTournaments] =
       await Promise.all([
-        db.match.count(),
-        db.team.count(),
-        db.tournament.count(),
+        db.match.count({ where: deviceWhere }),
+        db.team.count({ where: deviceWhere }),
+        db.tournament.count({ where: deviceWhere }),
         db.match.findMany({
-          where: { status: 'LIVE' },
+          where: { ...deviceWhere, status: 'LIVE' },
           include: {
             team1: { include: { players: true } },
             team2: { include: { players: true } },
@@ -26,7 +33,7 @@ export async function GET() {
           orderBy: { createdAt: 'desc' },
         }),
         db.match.findMany({
-          where: { status: 'COMPLETED' },
+          where: { ...deviceWhere, status: 'COMPLETED' },
           include: {
             team1: { include: { players: true } },
             team2: { include: { players: true } },
@@ -43,7 +50,7 @@ export async function GET() {
           take: 6,
         }),
         db.tournament.findMany({
-          where: { status: 'ONGOING' },
+          where: { ...deviceWhere, status: 'ONGOING' },
           include: {
             teams: { include: { team: true } },
             matches: {

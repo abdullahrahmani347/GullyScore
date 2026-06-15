@@ -19,14 +19,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Tournament } from '@/types';
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function TournamentsPage() {
   const { data: tournaments, isLoading, isError, mutate } = useSWR<Tournament[]>(
     '/api/tournaments',
-    fetcher
+    safeDeviceFetcher
   );
 
   const [deleteTarget, setDeleteTarget] = useState<Tournament | null>(null);
@@ -36,7 +35,7 @@ export default function TournamentsPage() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/tournaments/${deleteTarget.id}`, {
+      const res = await deviceFetch(`/api/tournaments/${deleteTarget.id}`, {
         method: 'DELETE',
       });
       if (!res.ok) {

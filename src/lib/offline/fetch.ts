@@ -76,7 +76,16 @@ export async function offlineFetch<T = any>(
   // If online, try the network request normally
   if (isOnline()) {
     try {
-      const response = await fetch(url, fetchOptions);
+      // Add device ID header for data isolation
+      const headers = new Headers(fetchOptions.headers);
+      if (typeof window !== 'undefined') {
+        const deviceId = localStorage.getItem('gullyscore-device-id');
+        if (deviceId) {
+          headers.set('X-Device-Id', deviceId);
+        }
+      }
+
+      const response = await fetch(url, { ...fetchOptions, headers });
 
       if (response.ok) {
         const data = await response.json();

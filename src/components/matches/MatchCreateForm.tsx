@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
+import { deviceFetch } from '@/lib/device';
 import type { Team, MatchData, TossDecision } from '@/types';
 
 interface MatchCreateFormProps {
@@ -106,9 +107,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
 
     try {
       // 1. Create the match
-      const matchRes = await fetch('/api/matches', {
+      const matchRes = await deviceFetch('/api/matches', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           team1Id,
           team2Id,
@@ -126,9 +126,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
       const match: MatchData = await matchRes.json();
 
       // 2. Update toss
-      const tossRes = await fetch(`/api/matches/${match.id}`, {
+      const tossRes = await deviceFetch(`/api/matches/${match.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           status: 'TOSS',
           tossWinnerId,
@@ -142,9 +141,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
       }
 
       // 3. Create first innings
-      const inningsRes = await fetch(`/api/matches/${match.id}/innings`, {
+      const inningsRes = await deviceFetch(`/api/matches/${match.id}/innings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           teamId: battingTeamId,
           inningsNumber: 1,
@@ -159,9 +157,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
       const innings = await inningsRes.json();
 
       // 4. Set openers (striker/non-striker)
-      const strikerRes = await fetch(`/api/matches/${match.id}/innings/${innings.id}/striker`, {
+      const strikerRes = await deviceFetch(`/api/matches/${match.id}/innings/${innings.id}/striker`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           strikerId,
           nonStrikerId,
@@ -174,9 +171,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
       }
 
       // 5. Set opening bowler
-      const bowlerRes = await fetch(`/api/matches/${match.id}/innings/${innings.id}/bowler`, {
+      const bowlerRes = await deviceFetch(`/api/matches/${match.id}/innings/${innings.id}/bowler`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bowlerId: openingBowlerId,
         }),

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
@@ -33,6 +34,12 @@ export async function GET(
 
     if (!match) {
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    // Verify ownership - only the device that created the match can view scorecard details
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
     }
 
     // Structure for scorecard display

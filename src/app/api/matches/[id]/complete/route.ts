@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateResultString } from '@/lib/scoring-utils';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function POST(
   request: NextRequest,
@@ -27,6 +28,12 @@ export async function POST(
 
     if (!match) {
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
     }
 
     const inn1 = match.innings.find((i) => i.inningsNumber === 1);

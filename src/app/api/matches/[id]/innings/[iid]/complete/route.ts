@@ -1,12 +1,24 @@
 import { db } from '@/lib/db';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function POST(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; iid: string }> }
 ) {
   try {
     const { id, iid } = await params;
+
+    // Verify match ownership
+    const match = await db.match.findUnique({ where: { id } });
+    if (!match) {
+      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
 
     const innings = await db.innings.findUniqueOrThrow({
       where: { id: iid },
@@ -28,8 +40,8 @@ export async function POST(
 
     if (innings.inningsNumber === 1) {
       // Create 2nd innings with the opposing team
-      const match = innings.match;
-      const battingTeam2Id = match.team1Id === innings.teamId ? match.team2Id : match.team1Id;
+      const matchData = innings.match;
+      const battingTeam2Id = matchData.team1Id === innings.teamId ? matchData.team2Id : matchData.team1Id;
       const target = innings.runs + 1;
 
       const secondInnings = await db.innings.create({

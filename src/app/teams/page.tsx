@@ -13,15 +13,11 @@ import { TeamCard } from '@/components/teams/TeamCard';
 import { TeamForm } from '@/components/teams/TeamForm';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { toast } from 'sonner';
+import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Team } from '@/types';
 
-const fetcher = (url: string) => fetch(url).then((r) => {
-  if (!r.ok) throw new Error('Failed to fetch teams');
-  return r.json();
-});
-
 export default function TeamsPage() {
-  const { data: teams, isLoading, isError, mutate } = useSWR<Team[]>('/api/teams', fetcher);
+  const { data: teams, isLoading, isError, mutate } = useSWR<Team[]>('/api/teams', safeDeviceFetcher);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -41,9 +37,8 @@ export default function TeamsPage() {
   }) => {
     setIsCreating(true);
     try {
-      const res = await fetch('/api/teams', {
+      const res = await deviceFetch('/api/teams', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
       if (!res.ok) {

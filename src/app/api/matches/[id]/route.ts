@@ -1,6 +1,7 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateLiveCode, emitLiveEvent } from '@/lib/live-emitter';
+import { getDeviceIdFromRequest, verifyOwnership, isAuthorized } from '@/lib/api-auth';
 
 export async function GET(
   request: NextRequest,
@@ -36,6 +37,12 @@ export async function GET(
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
     }
 
+    // Verify device ownership for detailed match data (scoring page)
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
+
     return NextResponse.json(match);
   } catch (error) {
     console.error('Error fetching match:', error);
@@ -51,6 +58,17 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const { status, tossWinnerId, tossDecision, currentInnings, result, winnerId } = body;
+
+    // Check ownership first
+    const existingMatch = await db.match.findUnique({ where: { id } });
+    if (!existingMatch) {
+      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    const ownership = verifyOwnership(request, existingMatch.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
+    }
 
     // Handle match abandon
     if (status === 'ABANDONED') {
@@ -92,8 +110,7 @@ export async function PATCH(
     // If match is going LIVE, generate a live code if it doesn't have one
     let liveCode: string | undefined;
     if (status === 'LIVE') {
-      const existingMatch = await db.match.findUnique({ where: { id } });
-      if (existingMatch && !existingMatch.liveCode) {
+      if (!existingMatch.liveCode) {
         // Generate unique code (retry if collision)
         let attempts = 0;
         while (attempts < 10) {
@@ -162,6 +179,12 @@ export async function DELETE(
     const match = await db.match.findUnique({ where: { id } });
     if (!match) {
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    const ownership = verifyOwnership(request, match.deviceId);
+    if (!isAuthorized(ownership)) {
+      return ownership;
     }
 
     // Prevent deletion of live matches
