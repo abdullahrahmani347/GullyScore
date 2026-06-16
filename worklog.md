@@ -59,3 +59,35 @@ Stage Summary:
 - Database path resolves portably on any deploy target (no more hard-coded /home/z/my-project absolute path)
 - Platform should now be able to deploy the code without "problem deploying" error
 - All build + runtime checks pass locally
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix deployment failure (second attempt — "Sorry, there was a problem deploying the code")
+
+Work Log:
+- Discovered platform's deploy pipeline by reading .zscripts/build.sh and .zscripts/start.sh
+- Found that platform's start.sh EXPLICITLY exports DATABASE_URL=file:/app/db/custom.db before starting server
+- Found that platform's build.sh EXPLICITLY copies db/custom.db into $BUILD_DIR/db/ and runs db:push against it
+- Realized my previous db.ts "fix" was the actual cause of the deployment failure:
+  * My code unconditionally overrode DATABASE_URL in production with process.cwd()/db/custom.db
+  * On the deploy target, process.cwd() = /app/next-service-dist/ (start.sh cd's into next-service-dist/)
+  * My override pointed Prisma to /app/next-service-dist/db/custom.db — a path that does NOT exist
+  * The actual DB was at /app/db/custom.db (set by the platform's start.sh)
+  * Prisma failed to open DB → server crashed → "problem deploying"
+- Reverted src/lib/db.ts to minimal version that respects whatever DATABASE_URL the platform sets
+  * Only difference from original: reduced log verbosity in production (error/warn instead of query)
+- Reverted package.json build script to original (platform handles DB + .prisma copying itself)
+- Simulated full deploy scenario locally:
+  * Copied standalone build to /tmp/deploy-test/ (mirroring platform's $BUILD_DIR layout)
+  * Set DATABASE_URL=file:/tmp/deploy-test/db/custom.db (simulating /app/db/custom.db)
+  * Started server with `bun server.js` (platform's exact command)
+  * Verified HTTP 200 for /, /api/stats, /api/teams
+  * Server stayed healthy
+- Kept allowedDevOrigins in next.config.ts (harmless improvement)
+
+Stage Summary:
+- Root cause of deploy failure: my previous db.ts override conflicted with platform's DATABASE_URL setup
+- Fix: revert db.ts to respect platform-set DATABASE_URL; let platform's .zscripts handle DB packaging
+- Verified end-to-end: clean build + simulated deploy scenario all return HTTP 200
+- Platform should now deploy successfully
