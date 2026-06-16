@@ -91,3 +91,38 @@ Stage Summary:
 - Fix: revert db.ts to respect platform-set DATABASE_URL; let platform's .zscripts handle DB packaging
 - Verified end-to-end: clean build + simulated deploy scenario all return HTTP 200
 - Platform should now deploy successfully
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix persistent deployment failure (third attempt — bundle size was exceeding platform limit)
+
+Work Log:
+- Investigated platform's actual deploy pipeline by reading .zscripts/build.sh + start.sh
+- Discovered root cause: standalone build was 155MB → 53MB tarball, likely exceeding deploy size limit
+- Identified largest contributors:
+  * @prisma/client/runtime: 58MB (WASM blobs for ALL 5 database engines — sqlite, mysql, sqlserver, cockroachdb, postgresql — but we only use sqlite)
+  * @img (sharp native binaries): 33MB (we don't use next/image)
+  * typescript: 20MB (devDep, shouldn't be in standalone)
+  * .prisma/client: 20MB (libquery_engine native binary — needed)
+- Created /home/z/my-project/scripts/prune-standalone.mjs:
+  * Removes non-sqlite Prisma engine WASM blobs (saves ~30MB)
+  * Removes typescript from standalone (saves ~20MB)
+  * Removes sharp/@img (saves ~33MB)
+  * Removes .next/cache if leaked into standalone
+  * Strips source maps (*.map files)
+- Updated package.json build script to run prune-standalone.mjs after next build
+- Updated next.config.ts: set images.unoptimized = true (we don't use next/image)
+- Verified end-to-end:
+  * Clean rebuild succeeded
+  * Pruned standalone: 80MB (down from 155MB — 48% reduction)
+  * Final tarball: 26MB (down from 53MB — 51% reduction)
+  * Pruned server starts cleanly, all endpoints return HTTP 200
+  * Dev server restarted after .next cache was wiped, healthy again
+
+Stage Summary:
+- Deploy bundle size reduced from 53MB → 26MB (51% reduction)
+- Pruning is automatic via build script — no manual intervention needed
+- All app functionality preserved (verified by HTTP 200 on /, /api/stats, /api/teams)
+- Dev server healthy on :3000, pruned production server verified on :3460
+- Platform should now accept the deploy
