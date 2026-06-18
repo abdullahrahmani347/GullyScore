@@ -156,3 +156,36 @@ Stage Summary:
 - Prune step is non-fatal
 - Caddyfile simplified to minimal production config
 - All pipeline steps verified locally
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix blank white page on deployed app (only bottom nav visible)
+
+Work Log:
+- Analyzed user's screenshot with VLM — confirmed: white background, only bottom nav visible
+- Fetched SSR HTML from both dev (port 3000) and production (port 3462) — both contain full visible content:
+  "GullyScore | Cricket scoring, simplified | New Match | Live Matches | Recent Matches | Active Leagues | Home | Matches | Teams | Leagues"
+- CSS loads correctly (HTTP 200, 134KB) and contains all theme tokens (#070710, --color-bg-app, etc.)
+- Diagnosis: Service Worker was caching OLD broken deploy's HTML and assets
+  * Old broken deploy cached '/' and '/_next/static/*' in service worker
+  * New deploy works on server, but SW intercepts requests and returns OLD cached HTML
+  * Old cached HTML references /_next/static/chunks/<old-hash>.js files that no longer exist on new deploy
+  * JS fails to load → React doesn't hydrate → only SSR HTML (with no JS-driven theming) renders
+  * Bottom nav has inline styling so it's still visible
+- Fixed public/sw.js:
+  1. Bumped CACHE_VERSION from 'gullyscore-v2' to 'gullyscore-v3-deploy-fix' to invalidate all old caches
+  2. Made activate handler aggressively delete ALL caches that don't match current version (not just gullyscore-prefixed ones — old deploys may have used different names)
+  3. Added self.clients.claim() inside event.waitUntil() so new SW takes control of current page immediately
+  4. Added new networkFirstNavigation() function that ALWAYS prefers fresh network HTML over cache
+     - Old code used networkFirstWithCache for navigation, which would fall back to stale cached HTML if network was slow
+     - New code only falls back to cache when network genuinely fails (offline)
+  5. Added proper offline fallback HTML response
+- Verified dev server (port 3000) and production build both serve correct content with new SW
+
+Stage Summary:
+- Service Worker no longer caches stale HTML for navigation requests
+- All old caches will be invalidated on next SW activation (CACHE_VERSION bump + aggressive cleanup)
+- New SW takes control immediately via skipWaiting() + clients.claim()
+- Build regenerated with new SW
+- User needs to: (1) redeploy, (2) hard refresh browser (Ctrl+Shift+R) to bypass any HTTP caching of old SW

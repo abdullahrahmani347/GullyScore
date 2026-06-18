@@ -11,7 +11,7 @@
  * retry logic, and recovery UI.
  */
 
-var CACHE_VERSION = 'gullyscore-v2';
+var CACHE_VERSION = 'gullyscore-v3-deploy-fix';
 var STATIC_CACHE = CACHE_VERSION + '-static';
 var API_CACHE = CACHE_VERSION + '-api';
 
@@ -70,24 +70,29 @@ self.addEventListener('install', function(event) {
   self.skipWaiting();
 });
 
-// Activate event — clean up old caches
+// Activate event — clean up ALL old caches (aggressive cleanup for deploy fixes)
 self.addEventListener('activate', function(event) {
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
       return Promise.all(
         cacheNames
           .filter(function(name) {
-            return name.startsWith('gullyscore-') && name !== STATIC_CACHE && name !== API_CACHE;
+            // Delete any cache that doesn't match the current version exactly.
+            // This is intentionally broad — old broken deploys may have left
+            // stale caches with different version suffixes that we want gone.
+            return name !== STATIC_CACHE && name !== API_CACHE;
           })
           .map(function(name) {
             console.log('[SW] Deleting old cache:', name);
             return caches.delete(name);
           })
       );
+    }).then(function() {
+      // Take control of all clients immediately so the new SW applies
+      // to the current page without requiring a reload.
+      return self.clients.claim();
     })
   );
-  // Take control of all clients immediately
-  self.clients.claim();
 });
 
 // Fetch event — route requests to appropriate caching strategy
@@ -124,7 +129,7 @@ self.addEventListener('fetch', function(event) {
 
   // Navigation requests (HTML pages) — NetworkFirst with cache fallback
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirstWithCache(request));
+    event.respondWith(networkFirstNavigation(request));
     return;
   }
 
@@ -160,6 +165,37 @@ function cacheFirst(request) {
         });
       }
       return new Response('Offline', { status: 503, statusText: 'Offline' });
+    });
+  });
+}
+
+/**
+ * NetworkFirst for navigation — always prefer fresh HTML from network.
+ * Only fall back to cached app shell if network is genuinely unreachable.
+ * This prevents the SW from serving a stale broken HTML page when a new
+ * deploy has shipped.
+ */
+function networkFirstNavigation(request) {
+  return fetch(request).then(function(response) {
+    if (response.ok) {
+      // Cache the fresh app shell for offline use later
+      caches.open(STATIC_CACHE).then(function(cache) {
+        cache.put(request, response.clone());
+      });
+    }
+    return response;
+  }).catch(function() {
+    // Network genuinely failed — try cache
+    return caches.match(request).then(function(cached) {
+      if (cached) return cached;
+      return caches.match('/').then(function(cachedRoot) {
+        if (cachedRoot) return cachedRoot;
+        return new Response(
+          '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2rem;text-align:center">' +
+          '<h2>You are offline</h2><p>Connect to the internet and refresh.</p></body></html>',
+          { status: 503, statusText: 'Offline', headers: { 'Content-Type': 'text/html' } }
+        );
+      });
     });
   });
 }
