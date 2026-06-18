@@ -107,6 +107,26 @@ const { count: mapCount, bytes: mapBytes } = deleteByPattern(/\.map$/, STANDALON
 console.log(`  ✓ Removed ${mapCount} source map files`)
 logMb('  Source maps total', mapBytes)
 
+// 5. Remove .env files from standalone — Next.js copies the project root's
+// .env into the standalone output, which on the dev container contains
+// `DATABASE_URL=file:/home/z/my-project/db/custom.db`. That path doesn't
+// exist on the deploy target, and even though start.sh exports the correct
+// DATABASE_URL before launching the server, having a stale .env next to
+// server.js is a footgun (bun, Next.js, and Prisma all load .env files at
+// runtime; while each is supposed to respect existing env vars, leaving
+// the wrong value sitting there invites subtle bugs).
+console.log('\n📦 Removing .env files from standalone (avoid DATABASE_URL leakage)...')
+for (const target of [
+  join(STANDALONE, '.env'),
+  join(STANDALONE, '.env.local'),
+  join(STANDALONE, '.env.production'),
+  join(STANDALONE, '.env.development'),
+]) {
+  if (existsSync(target)) {
+    tryRmSync(target, target.split('/').pop())
+  }
+}
+
 const after = dirSize(STANDALONE)
 logMb('Standalone size after pruning', after)
 const saved = before - after

@@ -189,3 +189,49 @@ Stage Summary:
 - New SW takes control immediately via skipWaiting() + clients.claim()
 - Build regenerated with new SW
 - User needs to: (1) redeploy, (2) hard refresh browser (Ctrl+Shift+R) to bypass any HTTP caching of old SW
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix persistent deployment failure (fifth attempt — start.sh was too brittle for the deploy target's actual environment)
+
+Work Log:
+- Investigated the platform's actual container entrypoint by reading /start.sh (the container's PID 1, run by tini):
+  * Discovered the dev container runs /start.sh (NOT my .zscripts/start.sh) as its entrypoint
+  * /start.sh initializes project, starts dev.sh (which runs Next.js dev), ends with `exec caddy run --config /app/Caddyfile`
+  * The platform's Caddy (PID 2) is the main process keeping the container alive, listening on :81, proxying to localhost:3000
+  * On the deploy target, my .zscripts/start.sh is invoked separately — and the platform's Caddy may already be on :81
+- Found three latent bugs in the old .zscripts/start.sh:
+  1. `sleep 1` PID check for Next.js was too short — Next.js cold start can take 2-5s; platform health check would time out before Next.js was ready
+  2. Hard-coded `/app/db/custom.db` check would `exit 1` if the deploy target extracted the tarball to a different root path
+  3. `exec caddy run --config Caddyfile` would crash the container if port 81 was already taken (by the platform's own Caddy from the base image)
+- Also found that the standalone build's `.env` file (containing `DATABASE_URL=file:/home/z/my-project/db/custom.db`) was being shipped in the tarball — even though start.sh overrides DATABASE_URL at runtime, having the stale dev path sitting next to server.js was a footgun
+- Rewrote .zscripts/start.sh to handle all edge cases:
+  * DB path fallback: tries /app/db/custom.db first, falls back to $BUILD_DIR/db/custom.db (relative to start.sh)
+  * Runtime fallback: prefers `bun` (matches build env), falls back to `node` if bun isn't in PATH on the deploy target
+  * Real HTTP health check: replaces the old `sleep 1` PID check with up to 30 attempts (1s apart) of `curl http://localhost:$PORT/` — accepts 200/307/308/404 as healthy
+  * Forces PORT=3000 (ignores platform's PORT env var) so Caddy's `reverse_proxy localhost:3000` always finds Next.js
+  * Forces DATABASE_URL to the resolved path if it leaked from .env as the dev path
+  * Caddy port detection: uses curl (not /dev/tcp, which is bash-only and doesn't work under #!/bin/sh) to check if :81 is already in use
+  * If port 81 is taken: skips our Caddy entirely (platform's Caddy already proxies :81 → :3000)
+  * If port 81 is free: starts our Caddy in the background, falls back to "Next.js only" mode if Caddy fails to bind (e.g., non-root user can't bind to privileged ports)
+  * Always waits on a long-running process at the end (either Caddy or Next.js) to keep the container alive
+- Updated scripts/prune-standalone.mjs to strip .env files from the standalone build output (avoids DATABASE_URL leakage to the deploy target)
+- Simplified Caddyfile to remove the `header_up` directives that Caddy was warning about (they're unnecessary — Caddy passes those headers by default)
+- Verified end-to-end:
+  * Clean rebuild succeeds, tarball is 26MB
+  * .env files are not in the tarball
+  * Simulated deploy (extract tarball, run start.sh as non-root user z with DATABASE_URL pointing at the test DB):
+    - DB fallback kicked in: "ℹ️ /app/db/custom.db not found, using fallback: /tmp/deploy-final/db/custom.db"
+    - Next.js health check passed on attempt 2: "✅ Next.js healthy on attempt 2"
+    - Port 81 detection worked (curl-based): "ℹ️ Port 81 is already in use (likely the platform's Caddy). Skipping our Caddy..."
+    - Next.js served HTTP 200 on all tested routes
+    - Script stayed alive (didn't crash when our Caddy was skipped)
+  * Dev server still healthy on :3000, platform Caddy still healthy on :81
+
+Stage Summary:
+- start.sh is now robust against: slow cold starts, missing DB at hardcoded path, missing bun in PATH, port 81 conflicts, Caddy bind failures, .env DATABASE_URL leakage
+- All five previous failure modes (Tasks 2-6) are now defended against in start.sh itself, not just in the build pipeline
+- Build pipeline unchanged: 26MB tarball, all required files included
+- Dev environment unaffected: still serves HTTP 200 on :3000 (Next.js dev) and :81 (platform Caddy proxy)
+- User should re-trigger the deploy from the generation page; if it still fails, the new diagnostic logging in start.sh will appear in the platform's deploy logs and tell us exactly which step failed
