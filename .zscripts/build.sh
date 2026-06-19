@@ -105,6 +105,35 @@ echo "  - 复制 start.sh 到 $BUILD_DIR"
 cp "$SCRIPT_DIR/start.sh" "$BUILD_DIR/start.sh"
 chmod +x "$BUILD_DIR/start.sh"
 
+# === GULLYSCORE DIAGNOSTIC v5 ===
+# Substitute the build-time MD5 of our Caddyfile into start.sh so that on the
+# deploy target, start.sh can compare it against /app/Caddyfile's MD5. This
+# converts "the platform is using a different Caddyfile" from an inference
+# into a direct comparison.
+if [ -f "$BUILD_DIR/Caddyfile" ]; then
+    CADDYFILE_HASH=$(md5sum "$BUILD_DIR/Caddyfile" | awk '{print $1}')
+    echo "  - Baking Caddyfile MD5 ($CADDYFILE_HASH) into start.sh"
+    # Use sed to replace the placeholder. Works on both GNU and BusyBox sed.
+    sed -i "s/__GULLYSCORE_CADDYFILE_HASH__/$CADDYFILE_HASH/" "$BUILD_DIR/start.sh"
+fi
+
+# Also bake a build timestamp into the standalone build's environment, so the
+# /api/__buildinfo endpoint can report it. This is the second independent
+# verification path: if /api/__buildinfo returns our marker + timestamp, the
+# deploy is running OUR build; if it returns 404 or a different marker, it
+# isn't.
+BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+GIT_SHA=$(cd "$NEXTJS_PROJECT_DIR" && git rev-parse --short HEAD 2>/dev/null || echo "no-git")
+echo "  - Baking BUILD_TIMESTAMP=$BUILD_TIMESTAMP GIT_SHA=$GIT_SHA into standalone .env"
+# Note: we explicitly DO write a .env here with ONLY these diagnostic vars
+# (not DATABASE_URL — that's set by start.sh at runtime). prune-standalone.mjs
+# strips any .env files from the dev environment, but this one is written
+# AFTER pruning runs (build.sh runs prune via `bun run build` which happens
+# before this section), so it survives.
+echo "BUILD_TIMESTAMP=$BUILD_TIMESTAMP" > "$BUILD_DIR/next-service-dist/.env"
+echo "GIT_SHA=$GIT_SHA" >> "$BUILD_DIR/next-service-dist/.env"
+echo "GULLYSCORE_BUILD_MARKER=v5" >> "$BUILD_DIR/next-service-dist/.env"
+
 # 打包到 $BUILD_DIR.tar.gz
 PACKAGE_FILE="${BUILD_DIR}.tar.gz"
 echo ""

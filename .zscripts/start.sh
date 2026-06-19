@@ -1,5 +1,29 @@
 #!/bin/sh
 
+# === GULLYSCORE DIAGNOSTIC MARKER v5 ===
+# These two lines are LITERALLY the first thing the script does, before set -e,
+# before any sourcing, before anything that could exit early. Two markers:
+#   (1) tee to /tmp/marker.log — survives if the process later crashes, since
+#       the file is flushed on every line.
+#   (2) write /tmp/marker_exists — survives if stdout is swallowed/redirected
+#       by the platform's process supervisor (many platforms only capture
+#       stdout from PID 1, not from children).
+# If neither marker exists on the deploy target after a failed deploy, that is
+# CONCLUSIVE evidence that this script is NOT what the platform invokes, and
+# all my fixes to it are irrelevant — I need to find the actual entrypoint.
+echo "GULLYSCORE_V5_RAN $(date -u +%s) pid=$$ ppid=$PPID cmdline=$(cat /proc/$$/cmdline 2>/dev/null | tr '\0' ' ')" | tee -a /tmp/marker.log
+echo "GULLYSCORE_V5_RAN" > /tmp/marker_exists
+echo "=== env dump (first 20) ===" | tee -a /tmp/marker.log
+env 2>/dev/null | head -20 | tee -a /tmp/marker.log
+echo "=== Caddyfile diagnostic ===" | tee -a /tmp/marker.log
+echo "MY_CADDYFILE_HASH_AT_BUILD_TIME=__GULLYSCORE_CADDYFILE_HASH__" | tee -a /tmp/marker.log
+echo "PLATFORM_CADDYFILE_HASH=$(md5sum /app/Caddyfile 2>&1)" | tee -a /tmp/marker.log
+echo "PLATFORM_CADDYFILE_CONTENTS:" | tee -a /tmp/marker.log
+cat /app/Caddyfile 2>&1 | tee -a /tmp/marker.log
+echo "MY_CADDYFILE_CONTENTS:" | tee -a /tmp/marker.log
+cat "$BUILD_DIR/Caddyfile" 2>&1 | tee -a /tmp/marker.log
+echo "=== end diagnostic ===" | tee -a /tmp/marker.log
+
 # NOTE: This script is invoked by the platform's deploy target after extracting
 # the build tarball. It must be robust against:
 #   - Slow Next.js cold starts (the old `sleep 1` check was too short — the
