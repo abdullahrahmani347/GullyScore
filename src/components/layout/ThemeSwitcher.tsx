@@ -1,9 +1,9 @@
 'use client';
 
-import { useSettingsStore, type ThemeMode } from '@/store/settingsStore';
+import { useSettingsStore, type ThemeOption } from '@/store/settingsStore';
 import { Sun, Moon, Battery } from 'lucide-react';
 
-const themes: { value: ThemeMode; label: string; icon: React.ReactNode; desc: string }[] = [
+const themes: { value: ThemeOption; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: 'dark', label: 'Dark', icon: <Moon size={14} />, desc: 'Default' },
   { value: 'amoled', label: 'AMOLED', icon: <Battery size={14} />, desc: 'Battery saver' },
   { value: 'light', label: 'Light', icon: <Sun size={14} />, desc: 'Daylight' },

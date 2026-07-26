@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSettingsStore, type ThemeMode } from '@/store/settingsStore';
+import { useSettingsStore, type ThemeOption } from '@/store/settingsStore';
 
 /**
  * Applies the data-theme attribute to <html> based on the user's
@@ -19,7 +19,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Update meta theme-color for browser chrome
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (metaThemeColor) {
-      const colors: Record<ThemeMode, string> = {
+      const colors: Record<ThemeOption, string> = {
         dark: '#070710',
         amoled: '#000000',
         light: '#F5F5FA',
