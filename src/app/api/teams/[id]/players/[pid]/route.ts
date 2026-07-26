@@ -1,12 +1,14 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; pid: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id, pid } = await params;
 
     // Verify team ownership
@@ -43,6 +45,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; pid: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id, pid } = await params;
 
     // Verify team ownership

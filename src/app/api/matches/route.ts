@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeviceIdFromRequest } from '@/lib/api-auth';
 
@@ -11,6 +12,8 @@ const inningsInclude = {
 
 export async function GET(request: NextRequest) {
   try {
+   await ensureDbSchema();
+    await ensureDbSchema();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const limitParam = searchParams.get('limit');
@@ -48,6 +51,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+   await ensureDbSchema();
+    await ensureDbSchema();
     const body = await request.json();
     const { team1Id, team2Id, totalOvers, maxWickets, venue, tournamentId } = body;
 

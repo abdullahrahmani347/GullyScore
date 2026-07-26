@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ensureDbSchema } from "@/lib/db";
 
 /**
  * GULLYSCORE DIAGNOSTIC ENDPOINT — /api/buildinfo
@@ -39,6 +40,17 @@ import { NextResponse } from "next/server";
  * these vars are unset — the endpoint reports "dev" mode instead.
  */
 export async function GET() {
+  // Verify the DB schema has actually been created (proves the bootstrap ran).
+  let dbStatus: "ok" | "error" | "unknown" = "unknown";
+  let dbError: string | undefined;
+  try {
+    await ensureDbSchema();
+    dbStatus = "ok";
+  } catch (e) {
+    dbStatus = "error";
+    dbError = e instanceof Error ? e.message : String(e);
+  }
+
   return NextResponse.json({
     marker: process.env.GULLYSCORE_BUILD_MARKER ?? "dev-no-marker",
     builtAt: process.env.BUILD_TIMESTAMP ?? "unset",
@@ -61,6 +73,8 @@ export async function GET() {
         // (which could leak internal layout).
         `set (${process.env.DATABASE_URL.split(":")[0]}:...)`
       : "unset",
+    dbStatus,
+    dbError,
     timestamp: new Date().toISOString(),
   });
 }

@@ -1,12 +1,14 @@
 import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeviceIdFromRequest, verifyOwnership, isAuthorized } from '@/lib/api-auth';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
     const tournament = await db.tournament.findUnique({
       where: { id },
@@ -52,6 +54,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
 
     // Check ownership first
@@ -115,6 +118,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
 
     // Check ownership first

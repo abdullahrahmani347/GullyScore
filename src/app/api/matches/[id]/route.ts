@@ -2,12 +2,14 @@ import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateLiveCode, emitLiveEvent } from '@/lib/live-emitter';
 import { getDeviceIdFromRequest, verifyOwnership, isAuthorized } from '@/lib/api-auth';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
     const match = await db.match.findUnique({
       where: { id },
@@ -55,6 +57,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
     const body = await request.json();
     const { status, tossWinnerId, tossDecision, currentInnings, result, winnerId } = body;
@@ -175,6 +178,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
     const match = await db.match.findUnique({ where: { id } });
     if (!match) {

@@ -2,12 +2,14 @@ import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateLiveCode } from '@/lib/live-emitter';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
     const body = await request.json();
     const { teamId, inningsNumber, target } = body;

@@ -1,5 +1,6 @@
 import { db } from '@/lib/db';
 import { NextResponse } from 'next/server';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 /**
  * GET /api/live/[code]
@@ -11,6 +12,7 @@ export async function GET(
   { params }: { params: Promise<{ code: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { code } = await params;
 
     // Normalize: remove "GS-" prefix if present, uppercase

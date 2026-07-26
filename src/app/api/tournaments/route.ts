@@ -1,10 +1,13 @@
 import { db } from '@/lib/db';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateRoundRobinSchedule } from '@/lib/scoring-utils';
 import { getDeviceIdFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
+   await ensureDbSchema();
+    await ensureDbSchema();
     // Get deviceId from request header for filtering
     const deviceId = getDeviceIdFromRequest(request);
 
@@ -43,6 +46,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+   await ensureDbSchema();
+    await ensureDbSchema();
     const body = await request.json();
     const { name, format, totalOvers, teamIds } = body;
 

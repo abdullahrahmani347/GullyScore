@@ -3,12 +3,14 @@ import { recordBall } from '@/lib/scoring-engine';
 import { emitLiveEvent } from '@/lib/live-emitter';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { db } from '@/lib/db';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; iid: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id, iid } = await params;
 
     // Verify match ownership before recording ball

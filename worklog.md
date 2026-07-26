@@ -333,3 +333,81 @@ Stage Summary:
 - Build errors from orphaned repo.tar files fixed via ignoreBuildErrors + ignoreDuringBuilds.
 - Expected cold-start timeline on deploy target: bun install (30-60s) + db:push (5-10s) + build (17s) + start (1s) = 53-88s, well under FC's 120s budget.
 - User should click redeploy. If it succeeds, /api/buildinfo will return marker=v5 confirming our build is running.
+
+---
+Task ID: 9
+Agent: main (Super Z)
+Task: Fix "Failed to load dashboard" on Z.ai preview deploy (GullyScore)
+
+Work Log:
+- Read user screenshot (Screenshot (19).png) showing deployed GullyScore app at
+  https://preview-chat-8ad6f7e9-f541-4d33-b906-8e31a003d637.space-z.ai —
+  frontend shell loads but dashboard shows "Failed to load dashboard" error.
+- Hit /api/buildinfo diagnostic on the deployed URL → got GROUND TRUTH:
+  - databaseUrl: "unset"  ← ROOT CAUSE — platform doesn't inject DATABASE_URL
+  - marker: "dev-no-marker", builtAt: "unset"  ← my v5 build markers NOT in deploy
+  - cwd: /home/z/my-project/.next/standalone, runtime: node, mode: production
+  - Conclusion: platform builds `next build` and runs standalone/server.js
+    directly. My .zscripts/start.sh and Caddyfile are bypassed entirely.
+- Confirmed /api/stats returns 500 "Failed to fetch stats" on deploy. Same for
+  /api/teams. Root /api returns 200 (no DB).
+- Read dashboard page (src/app/page.tsx): uses SWR to fetch /api/stats.
+- Read /api/stats/route.ts: uses Prisma `db.match.count()` etc. Throws when
+  DATABASE_URL is unset (Prisma's env("DATABASE_URL") resolves to undefined).
+- Read prisma/schema.prisma: provider=sqlite, url=env("DATABASE_URL").
+- Confirmed Prisma native engine IS bundled in standalone build
+  (.next/standalone/node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node, 17MB).
+- Confirmed /tmp is writable.
+- Generated exact DDL via `prisma migrate diff --from-empty --to-schema-datamodel
+  prisma/schema.prisma --script`.
+
+Fix Applied:
+1. src/lib/db.ts:
+   - Added `if (!process.env.DATABASE_URL) process.env.DATABASE_URL = 'file:/tmp/gullyscore.db'`
+     BEFORE PrismaClient construction. /tmp is writable on serverless.
+   - Added SCHEMA_DDL constant with all CREATE TABLE / CREATE INDEX statements
+     (wrapped in IF NOT EXISTS for idempotence).
+   - Added `ensureDbSchema()` async function with cached Promise for concurrency
+     safety. Runs DDL via basePrisma.$executeRawUnsafe, splitting on `;`.
+   - Tried Prisma `$extends` with `$allOperations` wrapper — broke nested
+     writes with "Cannot convert undefined or null to object" (known Prisma 6
+     issue). Reverted to plain PrismaClient export.
+2. src/lib/db-bootstrap.ts: thin re-export of ensureDbSchema for routes that
+   import from @/lib/db-bootstrap (avoids circular dep).
+3. scripts/patch-routes-bootstrap.mjs: idempotent script that adds
+   `await ensureDbSchema()` after the first `try {` in every exported handler
+   across all 23 API route.ts files. Also adds the import.
+4. Manually fixed /api/matches/[id]/stream/route.ts — patcher had inserted
+   `await` inside a non-async arrow function (sendEvent). Moved the bootstrap
+   call to the top of the GET handler before the first DB query.
+5. Cleaned up unused imports in /api/route.ts and /api/buildinfo/route.ts.
+6. Enhanced /api/buildinfo to report `dbStatus` ("ok"|"error"|"unknown") and
+   `dbError` — proves the bootstrap ran on the deploy target.
+
+Smoke Test (with DATABASE_URL unset to simulate deploy):
+- /api/buildinfo → databaseUrl: "set (file:...)", dbStatus: "ok" ✓
+- /api/stats (cold) → 200 {totalMatches:0, totalTeams:0, ...} ✓
+- POST /api/teams → 201 with created team + nested players ✓
+- /api/stats (after POST) → totalTeams: 1 ✓ (data persisted in warm instance)
+- /tmp/gullyscore.db created at 114KB ✓
+- No errors in server log ✓
+
+Stage Summary:
+- Root cause was definitively identified via the /api/buildinfo diagnostic
+  endpoint (Task 8 instrumentation paid off): DATABASE_URL is unset on the
+  deploy target, causing every Prisma query to throw.
+- Fix: default DATABASE_URL to /tmp/gullyscore.db when unset + auto-bootstrap
+  SQLite schema on first request via raw DDL.
+- Tradeoff: data is EPHEMERAL on serverless (lost on cold start). Dashboard
+  will always render; user-created data does NOT survive instance recycling.
+  For production, set DATABASE_URL to a persistent volume or external DB.
+- Deploy target builds `next build` and runs standalone/server.js directly —
+  my .zscripts/start.sh and Caddyfile are irrelevant. Future deploys don't
+  need them.
+- Files changed:
+  - src/lib/db.ts (default DATABASE_URL + ensureDbSchema + SCHEMA_DDL)
+  - src/lib/db-bootstrap.ts (compat re-export)
+  - scripts/patch-routes-bootstrap.mjs (new)
+  - src/app/api/**/route.ts (23 files patched with ensureDbSchema call)
+  - src/app/api/buildinfo/route.ts (added dbStatus + dbError reporting)
+- Next step: redeploy. Dashboard should now render with empty state.

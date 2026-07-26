@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { undoLastBall } from '@/lib/scoring-engine';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { db } from '@/lib/db';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; iid: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id, iid } = await params;
 
     // Verify match ownership before undoing ball

@@ -2,12 +2,14 @@ import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { generateResultString } from '@/lib/scoring-utils';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await ensureDbSchema();
     const { id } = await params;
 
     const match = await db.match.findUnique({

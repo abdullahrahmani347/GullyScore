@@ -1,5 +1,6 @@
 import { subscribeToMatch } from '@/lib/live-emitter';
 import { db } from '@/lib/db';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: matchId } = await params;
+
+  // Auto-create SQLite schema if missing (serverless cold-start safety).
+  await ensureDbSchema();
 
   // Verify match exists
   const match = await db.match.findUnique({ where: { id: matchId } });

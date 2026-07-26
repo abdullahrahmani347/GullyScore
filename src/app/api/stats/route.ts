@@ -1,9 +1,13 @@
 import { db } from '@/lib/db';
+import { ensureDbSchema } from '@/lib/db-bootstrap';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeviceIdFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
+    await ensureDbSchema();
+    // Auto-create SQLite schema if missing (serverless cold-start safety).
+    await ensureDbSchema();
     // Get deviceId from request header for filtering
     const deviceId = getDeviceIdFromRequest(request);
 
