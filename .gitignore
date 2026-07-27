@@ -50,5 +50,11 @@ test
 prompt
 
 server.log
+
+# Build artifacts / test outputs — should never be deployed
+/download/
+/tool-results/
+/scripts/test-*.sh
+
 # Skills directory
 /skills/
