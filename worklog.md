@@ -462,3 +462,31 @@ Stage Summary:
 - Mobile: full 3D with reduced particle count (700 vs 1500)
 - Files created: Hero3D.tsx, LandingPage.tsx, AppShell.tsx, src/app/page.tsx (replaced)
 - Files modified: BottomNav.tsx, layout.tsx
+
+---
+Task ID: 11
+Agent: main
+Task: Fix landing page scroll animation being too slow + dashboard not displaying properly when clicking the button
+
+Work Log:
+- Diagnosed scroll slowness: 7 pinned sections × +=120% viewport × scrub:1 = 14434px total scroll (16x viewport), animations lagged 1s behind scroll
+- Diagnosed dashboard issue: Could not reproduce a hard failure, but identified that GSAP ScrollTrigger pinning can leave residual body/html inline styles during client-side navigation, causing potential visual glitches
+- Fixed scroll speed in LandingPage.tsx:
+  - Reduced pin distance from `+=120%` to `+=60%` for all 7 sections
+  - Reduced scrub from `1` to `0.4` (60% faster animation catch-up)
+  - Sped up hero entrance animation (delay 0.4s→0.15s, durations ~halved)
+- Fixed dashboard transition robustness:
+  - Added thorough GSAP cleanup on unmount: `ScrollTrigger.getAll().forEach(st => st.kill())`
+  - Clear residual `overflow`/`padding` inline styles from body and htmlElement
+  - Force `window.scrollTo(0, 0)` on unmount to reset scroll position
+- Rebuilt project (`bun run build`), restarted standalone server
+- Verified with agent-browser (1440x900):
+  - Landing page: 10654px scroll (down from 14434px, 26% reduction), all 7 sections render correctly
+  - Dashboard after clicking "Start Scoring": correct render, scrollY=0, no canvas leak, main visible/opacity 1, 0 console errors
+  - VLM confirmed all sections (hero, spectator, CTA, dashboard) look correct
+
+Stage Summary:
+- Scroll distance reduced from 16x to 11.8x viewport; scrub lag reduced from 1s to 0.4s — scroll feels substantially snappier
+- Dashboard transition from landing page is now robust against GSAP style leakage
+- No console errors, no chunk loading failures
+- Key file changed: src/components/landing/LandingPage.tsx

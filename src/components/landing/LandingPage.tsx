@@ -18,8 +18,8 @@
  *   - ScrollTrigger.create() with start:0 / end:'max' updates scrollRef.current
  *     on every scroll. The 3D scene reads this ref via useFrame — no React
  *     re-renders, no perf hit.
- *   - Each .pin-section is pinned for +=120% of viewport with scrub:1 for
- *     smooth, slow cinematic pacing.
+ *   - Each .pin-section is pinned for +=60% of viewport with scrub:0.4 for
+ *     snappy, responsive scrolling that still feels smooth.
  *   - Section-internal animations (score updates, chart draws, counter ticks)
  *     are wired to the pin's timeline via gsap.timeline().
  *
@@ -873,21 +873,21 @@ export default function LandingPage() {
       // Using .from() with scrub would leave content at opacity:0 at scroll 0,
       // making the hero blank on page load. Instead, play the entrance on mount
       // and use a separate scrubbed timeline for the scroll exit.
-      gsap.timeline({ delay: 0.4 })
-        .from('.hero-badge', { y: 20, opacity: 0, duration: 1, ease: 'power3.out' })
-        .from('.hero-title', { y: 30, opacity: 0, duration: 1.2, ease: 'power3.out' }, '-=0.6')
-        .from('.hero-tagline', { y: 20, opacity: 0, duration: 1, ease: 'power3.out' }, '-=0.7')
-        .from('.hero-cta', { y: 20, opacity: 0, duration: 1, ease: 'power3.out' }, '-=0.6')
-        .from('.hero-scroll-indicator', { opacity: 0, duration: 1, ease: 'power2.out' }, '-=0.4');
+      gsap.timeline({ delay: 0.15 })
+        .from('.hero-badge', { y: 16, opacity: 0, duration: 0.5, ease: 'power3.out' })
+        .from('.hero-title', { y: 24, opacity: 0, duration: 0.6, ease: 'power3.out' }, '-=0.3')
+        .from('.hero-tagline', { y: 16, opacity: 0, duration: 0.5, ease: 'power3.out' }, '-=0.35')
+        .from('.hero-cta', { y: 16, opacity: 0, duration: 0.5, ease: 'power3.out' }, '-=0.3')
+        .from('.hero-scroll-indicator', { opacity: 0, duration: 0.5, ease: 'power2.out' }, '-=0.2');
 
       // Hero scroll exit (scrubbed + pinned)
       gsap.timeline({
         scrollTrigger: {
           trigger: '#hero',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       }).to('.hero-content', { opacity: 0, y: -80, duration: 1, ease: 'none' });
 
@@ -896,9 +896,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#live-scoring',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       });
       // Animate feature cards in
@@ -949,9 +949,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#tournament',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       });
       tourTl
@@ -980,9 +980,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#spectator',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       });
       specTl
@@ -1009,9 +1009,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#charts',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       });
       chartTl
@@ -1035,9 +1035,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#stats',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       });
       statTl
@@ -1073,9 +1073,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#cta',
           start: 'top top',
-          end: '+=120%',
+          end: '+=60%',
           pin: true,
-          scrub: 1,
+          scrub: 0.4,
         },
       });
       ctaTl
@@ -1087,7 +1087,21 @@ export default function LandingPage() {
         .from('.cta-footer > *', { y: 10, opacity: 0, duration: 0.5, stagger: 0.1 }, '-=0.3');
     }, containerRef);
 
-    return () => ctx.revert();
+    return () => {
+      ctx.revert();
+      // Thoroughly kill any ScrollTriggers and clear residual inline styles
+      // that pinning may have left on body/html (prevents dashboard glitches).
+      ScrollTrigger.getAll().forEach((st) => st.kill());
+      if (typeof document !== 'undefined') {
+        document.body.style.cssText = document.body.style.cssText
+          .replace(/overflow[^;]*;?/gi, '')
+          .replace(/padding[^;]*;?/gi, '');
+        document.documentElement.style.cssText = document.documentElement.style.cssText
+          .replace(/overflow[^;]*;?/gi, '')
+          .replace(/padding[^;]*;?/gi, '');
+        window.scrollTo(0, 0);
+      }
+    };
   }, [mounted]);
 
   return (
