@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Home, ClipboardList, Users, Trophy } from 'lucide-react';
 
 const tabs = [
-  { href: '/', label: 'Home', icon: Home, match: (p: string) => p === '/' },
+  { href: '/dashboard', label: 'Home', icon: Home, match: (p: string) => p === '/dashboard' },
   { href: '/matches', label: 'Matches', icon: ClipboardList, match: (p: string) => p.startsWith('/matches') },
   { href: '/teams', label: 'Teams', icon: Users, match: (p: string) => p.startsWith('/teams') },
   { href: '/tournaments', label: 'Leagues', icon: Trophy, match: (p: string) => p.startsWith('/tournaments') },
@@ -14,7 +14,8 @@ const tabs = [
 export function BottomNav() {
   const pathname = usePathname();
 
-  // Hide on scoring screen (full-screen experience) and spectator pages
+  // Hide on landing page (full-screen 3D experience), scoring screens, and spectator pages
+  if (pathname === '/') return null;
   if (pathname.match(/\/matches\/[^/]+$/)) return null;
   if (pathname.startsWith('/live/')) return null;
 

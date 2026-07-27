@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegistration, GlobalOfflineBanner } from "@/components/offline";
@@ -37,9 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-bg-app text-t1 antialiased">
         <ErrorBoundary>
           <GlobalOfflineBanner />
-          <main className="min-h-dvh pb-20">
-            {children}
-          </main>
+          <AppShell>{children}</AppShell>
           <BottomNav />
           <Toaster />
           <ServiceWorkerRegistration />

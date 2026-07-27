@@ -411,3 +411,54 @@ Stage Summary:
   - src/app/api/**/route.ts (23 files patched with ensureDbSchema call)
   - src/app/api/buildinfo/route.ts (added dbStatus + dbError reporting)
 - Next step: redeploy. Dashboard should now render with empty state.
+
+---
+Task ID: 10
+Agent: main (Super Z)
+Task: Build 3D landing page for GullyScore with GSAP scroll animations
+
+Work Log:
+- Asked 8 clarifying questions (hero 3D, palette, stack, scroll style, sections, differentiators, pacing, mobile). User chose: scoreboard morph, stadium night palette, R3F+Drei, cinematic pinned, 7 sections, slow cinematic pacing, full 3D on mobile (lower poly).
+- Loaded fullstack-dev skill, read existing design system (globals.css: #070710 bg, #00D4AA accent, Inter + JetBrains Mono fonts).
+- Installed deps: gsap@3.15.0, three@0.185.1, @react-three/fiber@9.6.1, @react-three/drei@10.7.7.
+- Moved dashboard from src/app/page.tsx to src/app/dashboard/page.tsx.
+- Updated BottomNav: hide on '/', changed Home tab href to /dashboard.
+- Created AppShell client component to conditionally apply pb-20 (no bottom padding on landing).
+- Built src/components/landing/Hero3D.tsx — persistent R3F canvas with:
+  - ParticleField (1500 desktop / 700 mobile points, additive blending)
+  - Scoreboard (LED-style box with mint dot-matrix cells, fades out scroll 0.18-0.28)
+  - Phone (rounded box with scorecard UI elements, visible scroll 0.15-0.65)
+  - SpectatorPhone (second smaller phone, visible scroll 0.45-0.75)
+  - RunRateWorm (animated line of 50 dots, visible scroll 0.6-0.78)
+  - Camera drifts subtly based on scroll + idle time
+- Built src/components/landing/LandingPage.tsx — main orchestrator with:
+  - GSAP ScrollTrigger setup (global scroll progress for 3D scene)
+  - 7 pinned sections (hero, live-scoring, tournament, spectator, charts, stats, cta)
+  - Each section pinned for +=120% viewport with scrub:1 (slow cinematic pacing)
+  - Section-specific animations: score ticks up, balls appear, tournament lines draw, points table rows appear, spectator particles pulse, worm draws in, milestone alerts pop, counters tick up
+  - Dynamic import of Hero3D (ssr:false) to avoid Three.js SSR issues
+- Fixed critical bug: .from() with scrub left hero content at opacity:0 on page load. Fixed by using non-scrubbed entrance animation for hero (plays on mount) + scrubbed exit.
+- Added radial scrim behind hero text for readability over 3D scoreboard.
+- Boosted 3D lighting (ambient 0.25→0.45, point lights +50%) so phone models are visible in later sections.
+
+Verification (Agent Browser, 1440x900 viewport):
+- Hero: 9/10 — wordmark, tagline, CTAs, 3D scoreboard all visible
+- Live scoring: 9/10 — animated phone mockup + 6 feature cards
+- Tournament: 9/10 — round-robin graph + points table with NRR
+- Spectator: 9/10 — scorer phone + spectator phone + data flow particles
+- Charts: 8/10 — run-rate worm + milestone alerts
+- Stats: 9/10 — animated counters + differentiator badges
+- CTA: 9.5/10 — final button + footer with tech stack
+- No console errors (only non-fatal THREE.Clock deprecation warning)
+- No page errors
+- Dashboard still works at /dashboard
+- Lint: 2 errors in pre-existing files (CommentaryTicker.tsx, offline/fetch.ts), 0 in landing page code
+
+Stage Summary:
+- 3D landing page deployed at / (dashboard moved to /dashboard)
+- 7 cinematic pinned sections with GSAP ScrollTrigger, slow pacing (~1.5-2 min total scroll)
+- Persistent R3F canvas behind all sections: scoreboard morphs into phone, particles, run-rate worm
+- Matches app's dark stadium-night aesthetic (#070710 bg, #00D4AA accent, Inter + JetBrains Mono)
+- Mobile: full 3D with reduced particle count (700 vs 1500)
+- Files created: Hero3D.tsx, LandingPage.tsx, AppShell.tsx, src/app/page.tsx (replaced)
+- Files modified: BottomNav.tsx, layout.tsx
