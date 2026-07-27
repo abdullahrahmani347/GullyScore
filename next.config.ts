@@ -12,9 +12,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   // GullyScore doesn't use next/image — disable the optimization API so the
   // standalone build doesn't have to ship sharp (~33MB of native binaries).
   images: {
