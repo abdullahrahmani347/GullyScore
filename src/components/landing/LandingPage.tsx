@@ -1,47 +1,35 @@
 'use client';
 
 /**
- * LandingPage — Main orchestrator for the GullyScore 3D landing page.
+ * LandingPage — Main orchestrator for the GullyScore landing page.
  *
  * Structure:
- *   <Hero3D />           — persistent R3F canvas behind everything (z:0)
- *   <ScrollProgress />   — top progress bar
- *   <HeroSection />      — pinned, scroll 0–0.14
- *   <LiveScoringSection /> — pinned, scroll 0.14–0.29 (3D: scoreboard → phone)
- *   <TournamentSection />  — pinned, scroll 0.29–0.43 (3D: phone idle)
- *   <SpectatorSection />   — pinned, scroll 0.43–0.57 (3D: phone + spectator phone)
- *   <ChartsSection />      — pinned, scroll 0.57–0.71 (3D: run-rate worm)
- *   <StatsSection />       — pinned, scroll 0.71–0.86 (3D: particles only)
- *   <CTASection />         — pinned, scroll 0.86–1.0 (3D: particles + logo converge)
+ *   <StadiumBackground />  — persistent CSS/SVG animated background (z:0)
+ *   <ScrollProgress />     — top progress bar
+ *   <HeroSection />        — pinned, scroll 0–0.14
+ *   <LiveScoringSection /> — pinned, scroll 0.14–0.29
+ *   <TournamentSection />  — pinned, scroll 0.29–0.43
+ *   <SpectatorSection />   — pinned, scroll 0.43–0.57
+ *   <ChartsSection />      — pinned, scroll 0.57–0.71
+ *   <StatsSection />       — pinned, scroll 0.71–0.86
+ *   <CTASection />         — pinned, scroll 0.86–1.0
  *
  * GSAP setup:
- *   - ScrollTrigger.create() with start:0 / end:'max' updates scrollRef.current
- *     on every scroll. The 3D scene reads this ref via useFrame — no React
- *     re-renders, no perf hit.
- *   - Each .pin-section is pinned for +=60% of viewport with scrub:0.4 for
- *     snappy, responsive scrolling that still feels smooth.
+ *   - ScrollTrigger.create() with start:0 / end:'max' tracks progress.
+ *   - Each .pin-section is pinned for +=35% of viewport with scrub:0.2 for
+ *     snappy, fast-scrolling animations.
  *   - Section-internal animations (score updates, chart draws, counter ticks)
  *     are wired to the pin's timeline via gsap.timeline().
  *
- * All content lives above the canvas (relative z-10) with semi-transparent
- * dark backgrounds so the 3D remains visible but text stays readable.
+ * All content lives above the background (relative z-10) with semi-transparent
+ * dark backgrounds so text stays readable.
  */
 
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-
-// Dynamically import the R3F canvas — no SSR (Three.js needs window).
-// Loading fallback is null (transparent) so the HTML hero is never blocked
-// by the 3D canvas loading. The canvas is decorative (z-index: 0, behind
-// all HTML), so showing it late is fine — the hero text/buttons render
-// immediately because they live in plain HTML above the canvas.
-const Hero3D = dynamic(() => import('./Hero3D'), {
-  ssr: false,
-  loading: () => null,
-});
+import StadiumBackground from './StadiumBackground';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
@@ -853,7 +841,6 @@ function CTASection() {
 // ─────────────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef(0);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -864,15 +851,6 @@ export default function LandingPage() {
     if (!mounted) return;
 
     const ctx = gsap.context(() => {
-      // ── Global scroll progress for 3D scene ──
-      ScrollTrigger.create({
-        start: 0,
-        end: 'max',
-        onUpdate: (self) => {
-          scrollRef.current = self.progress;
-        },
-      });
-
       // ── Hero section: entrance plays on mount (NOT scrubbed), exit is scrubbed ──
       // Use .fromTo() with explicit end state (opacity: 1) so that even if GSAP
       // is interrupted or fails to complete, the end state is well-defined.
@@ -912,31 +890,31 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#hero',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
-      }).to('.hero-content', { opacity: 0, y: -80, duration: 1, ease: 'none' });
+      }).to('.hero-content', { opacity: 0, y: -80, duration: 0.6, ease: 'none' });
 
       // ── Live scoring: phone score ticks up, balls animate in ──
       const liveTl = gsap.timeline({
         scrollTrigger: {
           trigger: '#live-scoring',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
       });
       // Animate feature cards in
       liveTl.from('.live-feature-card', {
         y: 40,
         opacity: 0,
-        duration: 0.8,
+        duration: 0.5,
         stagger: 0.08,
       });
       // Animate phone in
-      liveTl.from('.live-phone-wrap', { x: -40, opacity: 0, duration: 1 }, '-=0.6');
+      liveTl.from('.live-phone-wrap', { x: -40, opacity: 0, duration: 0.6 }, '-=0.6');
       // Animate score counting up
       const scores = [4, 5, 7, 13, 13, 14, 18, 18];
       const wickets = [0, 0, 0, 0, 1, 1, 1, 1];
@@ -976,14 +954,14 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#tournament',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
       });
       tourTl
-        .from('.tournament-graph', { x: -40, opacity: 0, duration: 1 })
-        .from('.tournament-table', { x: 40, opacity: 0, duration: 1 }, '-=0.8')
+        .from('.tournament-graph', { x: -40, opacity: 0, duration: 0.6 })
+        .from('.tournament-table', { x: 40, opacity: 0, duration: 0.6 }, '-=0.8')
         .from('.tournament-node', {
           scale: 0,
           opacity: 0,
@@ -1007,15 +985,15 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#spectator',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
       });
       specTl
-        .from('.spectator-scorer', { x: -40, opacity: 0, duration: 1 })
-        .from('.spectator-viewer', { x: 40, opacity: 0, duration: 1 }, '-=0.8')
-        .from('.spectator-flow', { opacity: 0, duration: 0.8 }, '-=0.6');
+        .from('.spectator-scorer', { x: -40, opacity: 0, duration: 0.6 })
+        .from('.spectator-viewer', { x: 40, opacity: 0, duration: 0.6 }, '-=0.8')
+        .from('.spectator-flow', { opacity: 0, duration: 0.5 }, '-=0.6');
       // Loop particle pulse
       for (let i = 0; i < 5; i++) {
         specTl.to(`.spectator-particle-${i}`, {
@@ -1036,17 +1014,17 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#charts',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
       });
       chartTl
-        .from('.charts-worm-wrap', { y: 40, opacity: 0, duration: 1 })
+        .from('.charts-worm-wrap', { y: 40, opacity: 0, duration: 0.6 })
         .from('.charts-worm-line', {
           strokeDasharray: 300,
           strokeDashoffset: 300,
-          duration: 1.5,
+          duration: 0.6,
         }, '-=0.4')
         .from('.charts-worm-dot', { scale: 0, duration: 0.3 })
         .from('.milestone-alert', {
@@ -1062,16 +1040,16 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#stats',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
       });
       statTl
         .from('.stat-counter', {
           y: 40,
           opacity: 0,
-          duration: 0.8,
+          duration: 0.5,
           stagger: 0.1,
         })
         .from('.stats-badge', {
@@ -1087,7 +1065,7 @@ export default function LandingPage() {
         const obj = { val: 0 };
         statTl.to(obj, {
           val: target,
-          duration: 1.5,
+          duration: 0.6,
           ease: 'power2.out',
           onUpdate: () => {
             el.textContent = Math.round(obj.val).toLocaleString() + suffix;
@@ -1100,16 +1078,16 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#cta',
           start: 'top top',
-          end: '+=60%',
+          end: '+=35%',
           pin: true,
-          scrub: 0.4,
+          scrub: 0.2,
         },
       });
       ctaTl
-        .from('.cta-badge', { y: 20, opacity: 0, duration: 0.8 })
-        .from('.cta-title', { y: 30, opacity: 0, duration: 1 }, '-=0.5')
-        .from('.cta-subtitle', { y: 20, opacity: 0, duration: 0.8 }, '-=0.6')
-        .from('.cta-button-wrap', { y: 20, opacity: 0, scale: 0.9, duration: 0.8 }, '-=0.5')
+        .from('.cta-badge', { y: 20, opacity: 0, duration: 0.5 })
+        .from('.cta-title', { y: 30, opacity: 0, duration: 0.6 }, '-=0.5')
+        .from('.cta-subtitle', { y: 20, opacity: 0, duration: 0.5 }, '-=0.6')
+        .from('.cta-button-wrap', { y: 20, opacity: 0, scale: 0.9, duration: 0.5 }, '-=0.5')
         .from('.cta-features > *', { y: 10, opacity: 0, duration: 0.4, stagger: 0.1 }, '-=0.4')
         .from('.cta-footer > *', { y: 10, opacity: 0, duration: 0.5, stagger: 0.1 }, '-=0.3');
     }, containerRef);
@@ -1133,8 +1111,8 @@ export default function LandingPage() {
 
   return (
     <div ref={containerRef} className="relative">
-      {/* Persistent 3D canvas behind everything */}
-      {mounted && <Hero3D scrollRef={scrollRef} />}
+      {/* Persistent animated background behind everything */}
+      {mounted && <StadiumBackground />}
 
       {/* Top progress bar */}
       <ScrollProgress />

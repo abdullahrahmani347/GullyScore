@@ -542,3 +542,42 @@ Stage Summary:
 - Landing page is now bulletproof against GSAP/JD load failures: 3 layers of failsafe (CSS default opacity:1, try/catch, setTimeout)
 - Local build verified working — ready for deployment
 - Calling Complete tool to trigger platform deployment (the missing step from Task 12)
+
+---
+Task ID: 14
+Agent: main
+Task: Replace heavy 3D background with lightweight CSS/SVG background + speed up scroll
+
+Work Log:
+- User feedback: 3D background animation "sucks" / doesn't look good. Scroll animations too slow.
+- Replaced Hero3D (R3F + Three.js, 459 lines, hundreds of DOM nodes, WebGL) with new StadiumBackground component (pure CSS/SVG, ~150 lines, ~50 DOM nodes, no WebGL).
+- New background concept ("Stadium Aurora"):
+  1. Base: deep navy-to-black radial gradient (sky/ground split)
+  2. Aurora blobs: 3 large blurred mint/teal radial gradients that drift slowly (22s/28s/32s alternate cycles)
+  3. Pitch stripes: faint horizontal lines with perspective transform (subtle ground reference)
+  4. LED dots: 40 small particles with twinkle + drift animation (cricket scoreboard LED aesthetic)
+  5. Spotlight sweep: subtle radial gradient that pans across (18s cycle)
+  6. Top + bottom vignettes for text legibility
+- All keyframes inlined via styled-jsx so they survive even if globals.css fails to load.
+- Scroll speed improvements:
+  - Pin distance: +=60% → +=35% (42% reduction across all 7 sections)
+  - Scrub: 0.4 → 0.2 (50% faster animation catch-up)
+  - Internal animation durations: 0.8/1/1.5s → 0.5/0.6s (40-60% faster)
+- Result: bodyHeight dropped 10654px → 9079px (15% shorter total scroll), animations feel snappy.
+- Removed scrollRef (was only used by R3F useFrame loop, no longer needed).
+- Archived Hero3D.tsx → Hero3D.tsx.bak (not deleted in case user wants to revive).
+- Rebuilt (standalone dropped 108.3MB → 107.4MB; Three.js chunks no longer shipped).
+- Verified locally (agent-browser 1440x900):
+  - / : readyState complete, bodyHeight 9079px (10.09x viewport, down from 11.8x), no canvas, 40 LED dots, 3 aurora blobs, hero opacity:1, 19 next resources, 0 failed
+  - VLM rating: 8.5/10 — "modern, tech-forward, premium, elegant, non-distracting, production-ready"
+  - Live scoring section: visible, content correct
+  - CTA section: button + footer visible
+  - /dashboard transition: clean, no GSAP style leakage (body overflow: visible, bodyHeight: 900)
+  - 0 console errors
+
+Stage Summary:
+- Replaced heavy 3D canvas with elegant CSS/SVG aurora background (8.5/10 visual quality per VLM)
+- Scroll speed: 42% less pin distance + 50% faster scrub + 40-60% shorter internal animations
+- Standalone size reduced by 0.9MB (no Three.js bundles in landing page chunk)
+- Mobile: no WebGL dependency, all CSS animations GPU-composited
+- Calling Complete tool to trigger platform deployment
