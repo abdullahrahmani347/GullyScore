@@ -30,6 +30,15 @@ import Link from 'next/link';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import StadiumBackground from './StadiumBackground';
+import { LogoMark } from '@/components/brand/Logo';
+import {
+  FeaturePartnershipIcon,
+  FeatureStrikeRateIcon,
+  FeatureMaidenIcon,
+  FeatureRunRateIcon,
+  FeatureExtrasIcon,
+  FeatureBallHistoryIcon,
+} from '@/components/icons/GullyIcons';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
@@ -214,15 +223,15 @@ function LiveScoringSection() {
   const scores = [4, 5, 7, 13, 13, 14, 18, 18];
   const wickets = [0, 0, 0, 0, 1, 1, 1, 1];
 
-  // Feature list uses cricket scorecard notation instead of emoji icons.
-  // Each `code` is the 1-3 character abbreviation you'd see on a real scorecard.
+  // Feature list uses custom SVG icons (from GullyIcons) — each icon visually
+  // represents the feature: partnership figures, SR dial, maiden bowler, etc.
   const features = [
-    { code: 'P', title: 'Partnerships', desc: 'Every pair, every stand. Current and fallen, by ball.' },
-    { code: 'SR', title: 'Strike rates', desc: 'Batsman SR, bowler econ, computed live every delivery.' },
-    { code: 'M', title: 'Maidens', desc: 'Auto-detected. Bowler figures update the moment an over completes.' },
-    { code: 'CRR', title: 'Run rate', desc: 'Current and required. With DLS-ish projected totals.' },
-    { code: 'Wd', title: 'Extras', desc: 'Wides, no-balls, byes, leg-byes — all broken out, all editable.' },
-    { code: '•', title: 'Ball history', desc: 'Every delivery stored. Rewind to any over, any ball, any moment.' },
+    { Icon: FeaturePartnershipIcon, title: 'Partnerships', desc: 'Every pair, every stand. Current and fallen, by ball.' },
+    { Icon: FeatureStrikeRateIcon, title: 'Strike rates', desc: 'Batsman SR, bowler econ, computed live every delivery.' },
+    { Icon: FeatureMaidenIcon, title: 'Maidens', desc: 'Auto-detected. Bowler figures update the moment an over completes.' },
+    { Icon: FeatureRunRateIcon, title: 'Run rate', desc: 'Current and required. With DLS-ish projected totals.' },
+    { Icon: FeatureExtrasIcon, title: 'Extras', desc: 'Wides, no-balls, byes, leg-byes — all broken out, all editable.' },
+    { Icon: FeatureBallHistoryIcon, title: 'Ball history', desc: 'Every delivery stored. Rewind to any over, any ball, any moment.' },
   ];
 
   return (
@@ -326,20 +335,23 @@ function LiveScoringSection() {
           {/* Right: feature grid */}
           <div className="order-1 lg:order-2 live-features">
             <div className="grid sm:grid-cols-2 gap-4">
-              {features.map((f) => (
-                <div
-                  key={f.title}
-                  className="live-feature-card group p-5 rounded-2xl bg-bg-card/60 border border-border backdrop-blur-md hover:border-accent/30 transition-colors flex gap-4"
-                >
-                  <div className="shrink-0 w-10 h-10 rounded-lg bg-bg-app/80 border border-border flex items-center justify-center font-mono text-accent text-sm font-bold">
-                    {f.code}
+              {features.map((f) => {
+                const Icon = f.Icon;
+                return (
+                  <div
+                    key={f.title}
+                    className="live-feature-card group p-5 rounded-2xl bg-bg-card/60 border border-border backdrop-blur-md hover:border-accent/30 transition-colors flex gap-4"
+                  >
+                    <div className="shrink-0 w-10 h-10 rounded-lg bg-bg-app/80 border border-border flex items-center justify-center text-accent">
+                      <Icon size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-t1 font-semibold text-base mb-1">{f.title}</div>
+                      <div className="text-t3 text-sm leading-relaxed">{f.desc}</div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <div className="text-t1 font-semibold text-base mb-1">{f.title}</div>
-                    <div className="text-t3 text-sm leading-relaxed">{f.desc}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -835,7 +847,8 @@ function CTASection() {
         <footer className="cta-footer mt-24 pt-8 border-t border-border">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 text-t3 text-xs font-mono">
             <div className="flex items-center gap-3">
-              <span className="text-accent text-sm font-bold tracking-wide">GullyScore</span>
+              <LogoMark size={18} />
+              <span className="text-t1 text-sm font-bold tracking-wide">GullyScore</span>
               <span className="text-border">/</span>
               <span>made for the matches nobody else scores</span>
             </div>

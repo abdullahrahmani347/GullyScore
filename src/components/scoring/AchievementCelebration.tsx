@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { BADGES, type EarnedAchievement } from '@/lib/achievements';
+import { ACHIEVEMENT_ICONS } from '@/components/icons/GullyIcons';
 
 interface AchievementCelebrationProps {
   achievement: EarnedAchievement | null;
@@ -10,15 +11,16 @@ interface AchievementCelebrationProps {
 
 /**
  * Full-screen celebration animation when a player earns a badge for the first time.
- * Shows badge name, emoji, and player name with a dramatic entrance.
+ * Shows badge icon, name, and player name with a dramatic entrance.
  * Auto-dismisses after 4 seconds.
  */
 export function AchievementCelebration({ achievement, onDismiss }: AchievementCelebrationProps) {
   const badge = achievement ? BADGES[achievement.badgeId] : null;
+  const Icon = badge ? ACHIEVEMENT_ICONS[badge.iconKey as keyof typeof ACHIEVEMENT_ICONS] : null;
 
   return (
     <AnimatePresence>
-      {achievement && badge && (
+      {achievement && badge && Icon && (
       <motion.div
         key={achievement.badgeId}
         initial={{ opacity: 0 }}
@@ -36,14 +38,14 @@ export function AchievementCelebration({ achievement, onDismiss }: AchievementCe
           className="flex flex-col items-center text-center px-8"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Badge emoji */}
+          {/* Badge icon — custom SVG inside a glowing disc */}
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 12, delay: 0.3 }}
-            className="text-7xl mb-4"
+            className={`mb-4 flex items-center justify-center w-28 h-28 rounded-full ${badge.bgColor} border-2 border-current/30 shadow-[0_0_60px_rgba(0,212,170,0.3)]`}
           >
-            {badge.emoji}
+            <Icon size={64} className={badge.color} />
           </motion.div>
 
           {/* Badge name */}
@@ -126,6 +128,8 @@ export function AchievementCelebration({ achievement, onDismiss }: AchievementCe
 export function AchievementChip({ badgeId }: { badgeId: string }) {
   const badge = BADGES[badgeId];
   if (!badge) return null;
+  const Icon = ACHIEVEMENT_ICONS[badge.iconKey as keyof typeof ACHIEVEMENT_ICONS];
+  if (!Icon) return null;
 
   return (
     <span
@@ -135,7 +139,7 @@ export function AchievementChip({ badgeId }: { badgeId: string }) {
       `}
       title={badge.description}
     >
-      <span className="text-[10px]">{badge.emoji}</span>
+      <Icon size={11} />
       {badge.name}
     </span>
   );

@@ -653,3 +653,69 @@ Stage Summary:
 - Footer cleaned of tech-stack brag and boilerplate
 - Scroll 25% faster overall (11.8× → 8.88× viewport)
 - Calling Complete to trigger deployment
+
+---
+Task ID: 16
+Agent: main
+Task: Generate logo + replace emojis and text-based icons with custom SVG icons across the app
+
+Work Log:
+- Audited entire app for emojis + text-based icons (delegated to Explore agent). Found:
+  - 23 distinct emojis in 11 files (WicketModal 7, achievements.ts 10, MatchCreateForm 3, InningsBreak 1, TeamForm 12 user-picker, share.ts 5, match-story.ts 5)
+  - Text-based icons: P/SR/M/CRR/Wd/• on landing page (my Task 15 replacement), scorecard notation (W/Wd/Nb/4/6 etc.) which is legitimate cricket domain convention
+  - Logo was inconsistent: <Zap> (Lucide lightning) + wordmark in 4 places (SidebarNav, Dashboard×2, Live spectator); LandingPage footer was text-only; public/logo.svg existed but was orphaned
+
+- Created NEW Logo component (src/components/brand/Logo.tsx):
+  - Concept: stylized cricket wicket (3 stumps + 2 bails) with ball trajectory arc striking the stumps. Bails are slightly offset/jittered to suggest a wicket "just disturbed" — gives the mark action + story instead of being a static emblem.
+  - Three exports: <LogoMark> (just the icon), <LogoBadge> (icon on mint rounded-square badge), <LogoLockup> (badge + wordmark)
+  - All in currentColor so consumers control color (defaults to mint accent)
+  - Works at all sizes (16px favicon to 96px celebration)
+
+- Created NEW GullyIcons component library (src/components/icons/GullyIcons.tsx):
+  - Unified house style: 24×24 viewBox, stroke-based, strokeWidth 1.8, round caps/joins, currentColor
+  - 7 wicket-type icons (Bowled, Caught, RunOut, LBW, Stumped, HitWicket, RetiredHurt) — each depicts the physical action
+  - 10 achievement icons (Century, HalfCentury, SixMachine, EconomyKing, FiveFor, HatTrick, CaptainsKnock, Finisher, TournamentWinner, ManOfSeries)
+  - 6 landing-page feature icons (Partnership, StrikeRate, Maiden, RunRate, Extras, BallHistory)
+  - 4 general cricket icons (Bat, Ball, Toss, Field) for MatchCreateForm + InningsBreak
+  - 3 lookup maps: WICKET_TYPE_ICONS, ACHIEVEMENT_ICONS, FEATURE_ICONS
+
+- Emoji replacements:
+  - WicketModal: 7 emojis → 7 SVG wicket-type icons (rendered at 22px in mint)
+  - AchievementCelebration: emoji field → iconKey lookup → SVG icon rendered in 64px glowing disc
+  - AchievementChip: emoji → 11px SVG icon next to badge name
+  - achievements.ts: 10 emoji fields → iconKey string keys (kept .ts file as data, rendering stays in .tsx)
+  - MatchCreateForm: 3 emojis (🏏 Bat / 🥎 Field / Start Match 🏏) → SVG BatIcon + FieldIcon + plain text
+  - InningsBreakScreen: 🏏 → BatIcon (32px in mint)
+  - LandingPage features: P/SR/M/CRR/Wd/• text chips → 6 custom SVG icons (20px in mint)
+
+- Logo wiring (replaced 5 inconsistent <Zap> + wordmark usages):
+  - SidebarNav: <LogoMark size={24}> + wordmark (wordmark hidden on tablet/mobile)
+  - Dashboard header (×2: main + error state): <LogoMark size={24}> + wordmark
+  - Dashboard empty live-matches state: <LogoMark size={22}> in accent-dim circle
+  - Live spectator header: <LogoMark size={20}> + h1 wordmark
+  - Landing footer: <LogoMark size={18}> + wordmark (was previously text-only)
+  - Removed all `Zap` imports from these 4 files (SidebarNav, dashboard/page.tsx, live/[code]/page.tsx)
+  - Updated public/logo.svg with static SVG version of the new wicket mark (for PWA manifest / favicon)
+
+- Intentionally KEPT emojis (not UI chrome):
+  - TeamForm EMOJI_OPTIONS (12 emojis): user-selectable team identity data, intentional
+  - share.ts (5 emojis): consumed by WhatsApp share, depends on receiver's rendering
+  - match-story.ts (5 emojis): same — consumed externally as text
+  - migrate-partnerships.ts console.logs (4 emojis): developer-facing, not user-visible
+  - Cricket scorecard notation (W/Wd/Nb/4/6 etc.): legitimate domain convention, used in BallByBallLog, OverStrip, live page, BattingTable, BowlingTable, PointsTable — these are how cricket scorecards actually look, not AI tells
+
+- Type-check: 0 errors in any of my changed files (only pre-existing errors in match-story.ts remain, unrelated)
+- Build: succeeded, standalone 107.4MB
+- Verification (local, agent-browser 1440x900):
+  - Landing footer: LogoMark visible, VLM confirms "stylized cricket wicket or stumps" in mint
+  - Landing feature cards: 6 custom SVG icons rendering, VLM confirms "custom SVG icons, not emojis" with correct depictions (partnership figures, SR dial, maiden bowler, run-rate graph, extras wicket, ball-history grid)
+  - Dashboard: LogoMark visible at top-left, no Zap icons remain, VLM confirms "cricket-themed mark, not lightning bolt"
+  - All routes return HTTP 200
+  - 0 console errors
+
+Stage Summary:
+- Custom SVG logo (wicket + ball arc) wired into 5 brand locations, replacing inconsistent Zap placeholder
+- 26 emojis replaced with custom SVG icons across WicketModal, AchievementCelebration, MatchCreateForm, InningsBreakScreen, LandingPage features
+- New GullyIcons library: 27 custom SVG icons in unified house style
+- Intentionally kept: team emoji picker (user data), share text (external consumption), scorecard notation (domain convention)
+- Calling Complete to trigger deployment

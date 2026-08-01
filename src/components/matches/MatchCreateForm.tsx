@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { BatIcon, FieldIcon } from '@/components/icons/GullyIcons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -330,7 +331,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
                     }`}
                   >
                     <RadioGroupItem value="BAT" className="sr-only" />
-                    <span className="font-semibold text-sm">🏏 Bat</span>
+                    <BatIcon size={16} />
+                    <span className="font-semibold text-sm">Bat</span>
                   </label>
                   <label
                     className={`flex-1 flex items-center justify-center gap-2 rounded-xl border p-4 cursor-pointer transition-colors ${
@@ -340,7 +342,8 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
                     }`}
                   >
                     <RadioGroupItem value="FIELD" className="sr-only" />
-                    <span className="font-semibold text-sm">🥎 Field</span>
+                    <FieldIcon size={16} />
+                    <span className="font-semibold text-sm">Field</span>
                   </label>
                 </RadioGroup>
               </div>
@@ -437,7 +440,7 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
             disabled={!canProceed() || isSubmitting}
             className="flex-1 h-11 bg-accent text-bg-app hover:bg-accent/90 font-semibold rounded-xl disabled:opacity-50"
           >
-            {isSubmitting ? 'Creating...' : 'Start Match 🏏'}
+            {isSubmitting ? 'Creating...' : 'Start Match'}
           </Button>
         )}
       </div>

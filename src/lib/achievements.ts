@@ -23,7 +23,8 @@ import type {
 export interface AchievementBadge {
   id: string;
   name: string;
-  emoji: string;
+  /** Key into ACHIEVEMENT_ICONS map (see GullyIcons.tsx). */
+  iconKey: string;
   description: string;
   category: 'batting' | 'bowling' | 'all-round' | 'team' | 'tournament';
   color: string;     // Tailwind color class for the chip
@@ -34,7 +35,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   CENTURY: {
     id: 'CENTURY',
     name: 'Century Club',
-    emoji: '\uD83D\uDD25',
+    iconKey: 'century',
     description: '100+ runs in a single innings',
     category: 'batting',
     color: 'text-amber-300',
@@ -43,7 +44,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   HALF_CENTURY: {
     id: 'HALF_CENTURY',
     name: 'Half-Century',
-    emoji: '\u2B50',
+    iconKey: 'half_century',
     description: '50+ runs in a single innings',
     category: 'batting',
     color: 'text-blue-300',
@@ -52,7 +53,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   SIX_MACHINE: {
     id: 'SIX_MACHINE',
     name: 'Six Machine',
-    emoji: '\uD83D\uDCA5',
+    iconKey: 'six_machine',
     description: '3+ sixes in a single innings',
     category: 'batting',
     color: 'text-orange-300',
@@ -61,7 +62,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   ECONOMY_KING: {
     id: 'ECONOMY_KING',
     name: 'Economy King',
-    emoji: '\uD83C\uDFAF',
+    iconKey: 'economy_king',
     description: '< 5.0 RPO over a full match (min 2 overs)',
     category: 'bowling',
     color: 'text-green-300',
@@ -70,7 +71,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   FIVE_FOR: {
     id: 'FIVE_FOR',
     name: 'Five-For',
-    emoji: '\uD83C\uDFC6',
+    iconKey: 'five_for',
     description: '5+ wickets in a single innings',
     category: 'bowling',
     color: 'text-purple-300',
@@ -79,7 +80,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   HAT_TRICK: {
     id: 'HAT_TRICK',
     name: 'Hat Trick Hero',
-    emoji: '\uD83C\uDFA9',
+    iconKey: 'hat_trick',
     description: '3 wickets in 3 consecutive legal balls',
     category: 'bowling',
     color: 'text-red-300',
@@ -88,7 +89,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   CAPTAINS_KNOCK: {
     id: 'CAPTAINS_KNOCK',
     name: "Captain's Knock",
-    emoji: '\uD83E\uDD81',
+    iconKey: 'captains_knock',
     description: 'Top scorer in a losing team\'s innings',
     category: 'batting',
     color: 'text-yellow-300',
@@ -97,7 +98,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   FINISHER: {
     id: 'FINISHER',
     name: 'Finisher',
-    emoji: '\u26A1',
+    iconKey: 'finisher',
     description: 'Won a match in the final over chasing',
     category: 'all-round',
     color: 'text-cyan-300',
@@ -106,7 +107,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   TOURNAMENT_WINNER: {
     id: 'TOURNAMENT_WINNER',
     name: 'Tournament Winner',
-    emoji: '\uD83E\uDD47',
+    iconKey: 'tournament_winner',
     description: 'Won a tournament',
     category: 'team',
     color: 'text-gold',
@@ -115,7 +116,7 @@ export const BADGES: Record<string, AchievementBadge> = {
   MAN_OF_SERIES: {
     id: 'MAN_OF_SERIES',
     name: 'Man of the Series',
-    emoji: '\uD83D\uDC51',
+    iconKey: 'man_of_series',
     description: 'Most matches as Player of the Match in a tournament',
     category: 'tournament',
     color: 'text-gold',

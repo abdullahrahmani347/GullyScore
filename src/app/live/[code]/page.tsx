@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, RefreshCw, AlertTriangle, Radio, Copy, Check } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Radio, Copy, Check } from 'lucide-react';
+import { LogoMark } from '@/components/brand/Logo';
 import { formatOvers, calculateCRR, calculateRRR, formatStrikeRate, formatEconomy, formatBowlingFigures } from '@/lib/scoring-utils';
 import type { MatchData, InningsState, BallRecord } from '@/types';
 
@@ -432,7 +433,7 @@ export default function SpectatorPage() {
       <div className="px-4 pt-6 pb-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Zap size={20} className="text-accent" />
+            <LogoMark size={20} />
             <h1 className="text-xl font-bold text-t1">GullyScore</h1>
           </div>
           <div className="flex items-center gap-2">

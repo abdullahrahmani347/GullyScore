@@ -2,7 +2,7 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Plus, Zap, AlertTriangle, RefreshCw, Sun, Moon, Smartphone } from 'lucide-react';
+import { Plus, AlertTriangle, RefreshCw, Sun, Moon, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -10,6 +10,7 @@ import { QuickStats } from '@/components/dashboard/QuickStats';
 import { LiveMatchBanner } from '@/components/dashboard/LiveMatchBanner';
 import { RecentMatchCard } from '@/components/dashboard/RecentMatchCard';
 import { ActiveTournamentCard } from '@/components/dashboard/ActiveTournamentCard';
+import { LogoLockup, LogoMark } from '@/components/brand/Logo';
 import { safeDeviceFetcher } from '@/lib/device';
 import { useSettingsStore } from '@/store/settingsStore';
 import type { MatchData, Tournament } from '@/types';
@@ -60,7 +61,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h1 className="text-2xl font-bold text-t1 flex items-center gap-2">
-                <Zap size={24} className="text-accent flex-shrink-0" />
+                <LogoMark size={24} className="flex-shrink-0" />
                 <span>GullyScore</span>
               </h1>
               <p className="text-sm text-t2 mt-0.5">Cricket scoring, simplified</p>
@@ -103,7 +104,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-t1 flex items-center gap-2">
-              <Zap size={24} className="text-accent flex-shrink-0" />
+              <LogoMark size={24} className="flex-shrink-0" />
               <span>GullyScore</span>
             </h1>
             <p className="text-sm text-t2 mt-0.5">Cricket scoring, simplified</p>
@@ -145,7 +146,7 @@ export default function DashboardPage() {
         ) : (
           <div className="mx-4 rounded-2xl border border-border bg-bg-card p-6 flex flex-col items-center justify-center">
             <div className="w-12 h-12 rounded-full bg-accent-dim flex items-center justify-center mb-3">
-              <Zap size={22} className="text-accent" />
+              <LogoMark size={22} className="text-accent" />
             </div>
             <p className="text-sm text-t2 mb-1">No live matches</p>
             <p className="text-xs text-t3 mb-4">Start a new match to begin scoring</p>

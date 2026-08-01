@@ -6,6 +6,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { useMatchStore } from '@/store/matchStore';
 import type { WicketType, MatchData, InningsState, Player } from '@/types';
+import {
+  WicketBowledIcon,
+  WicketCaughtIcon,
+  WicketRunOutIcon,
+  WicketLbwIcon,
+  WicketStumpedIcon,
+  WicketHitWicketIcon,
+  WicketRetiredHurtIcon,
+} from '@/components/icons/GullyIcons';
 
 interface WicketModalProps {
   open: boolean;
@@ -15,14 +24,14 @@ interface WicketModalProps {
   onCancel: () => void;
 }
 
-const wicketTypes: { type: WicketType; label: string; icon: string }[] = [
-  { type: 'BOWLED', label: 'Bowled', icon: '🏏' },
-  { type: 'CAUGHT', label: 'Caught', icon: '✋' },
-  { type: 'RUN_OUT', label: 'Run Out', icon: '🏃' },
-  { type: 'LBW', label: 'LBW', icon: '🦵' },
-  { type: 'STUMPED', label: 'Stumped', icon: '🧤' },
-  { type: 'HIT_WICKET', label: 'Hit Wicket', icon: '💥' },
-  { type: 'RETIRED_HURT', label: 'Retired Hurt', icon: '🏥' },
+const wicketTypes: { type: WicketType; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  { type: 'BOWLED', label: 'Bowled', Icon: WicketBowledIcon },
+  { type: 'CAUGHT', label: 'Caught', Icon: WicketCaughtIcon },
+  { type: 'RUN_OUT', label: 'Run Out', Icon: WicketRunOutIcon },
+  { type: 'LBW', label: 'LBW', Icon: WicketLbwIcon },
+  { type: 'STUMPED', label: 'Stumped', Icon: WicketStumpedIcon },
+  { type: 'HIT_WICKET', label: 'Hit Wicket', Icon: WicketHitWicketIcon },
+  { type: 'RETIRED_HURT', label: 'Retired Hurt', Icon: WicketRetiredHurtIcon },
 ];
 
 export function WicketModal({ open, match, currentInnings, onConfirm, onCancel }: WicketModalProps) {
@@ -116,18 +125,21 @@ export function WicketModal({ open, match, currentInnings, onConfirm, onCancel }
 
         {step === 1 && (
           <div className="grid grid-cols-3 gap-2">
-            {wicketTypes.map((wt) => (
-              <motion.button
-                key={wt.type}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleWicketTypeSelect(wt.type)}
-                disabled={isSubmitting}
-                className="flex flex-col items-center justify-center h-20 rounded-xl bg-wicket/10 hover:bg-wicket/20 border border-wicket/20 transition-colors"
-              >
-                <span className="text-lg mb-1">{wt.icon}</span>
-                <span className="text-xs font-medium text-t1">{wt.label}</span>
-              </motion.button>
-            ))}
+            {wicketTypes.map((wt) => {
+              const Icon = wt.Icon;
+              return (
+                <motion.button
+                  key={wt.type}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleWicketTypeSelect(wt.type)}
+                  disabled={isSubmitting}
+                  className="flex flex-col items-center justify-center h-20 rounded-xl bg-wicket/10 hover:bg-wicket/20 border border-wicket/20 transition-colors"
+                >
+                  <Icon size={22} className="text-wicket mb-1.5" />
+                  <span className="text-xs font-medium text-t1">{wt.label}</span>
+                </motion.button>
+              );
+            })}
           </div>
         )}
 

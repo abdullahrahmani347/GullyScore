@@ -2,7 +2,8 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Home, ClipboardList, Users, Trophy, Zap } from 'lucide-react';
+import { Home, ClipboardList, Users, Trophy } from 'lucide-react';
+import { LogoMark } from '@/components/brand/Logo';
 
 const tabs = [
   { href: '/', label: 'Home', icon: Home, match: (p: string) => p === '/' },
@@ -21,9 +22,11 @@ export function SidebarNav() {
   return (
     <aside className="hidden md:flex fixed left-0 top-0 bottom-0 z-40 flex-col border-r border-border bg-bg-app/90 backdrop-blur-xl w-16 lg:w-52">
       {/* Logo */}
-      <div className="flex items-center gap-2 h-14 px-3 border-b border-border">
-        <Zap size={22} className="text-accent flex-shrink-0" />
-        <span className="hidden lg:block text-lg font-bold text-t1">GullyScore</span>
+      <div className="flex items-center gap-2.5 h-14 px-3 border-b border-border">
+        <LogoMark size={24} className="flex-shrink-0" />
+        <span className="hidden lg:block text-lg font-bold text-t1 leading-none">
+          Gully<span className="text-accent">Score</span>
+        </span>
       </div>
 
       {/* Nav items */}

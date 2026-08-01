@@ -6,6 +6,7 @@ import { Separator } from '@/components/ui/separator';
 import { useMatchStore } from '@/store/matchStore';
 import { formatOvers, calculateCRR } from '@/lib/scoring-utils';
 import type { MatchData, InningsState, Player } from '@/types';
+import { BatIcon } from '@/components/icons/GullyIcons';
 
 interface InningsBreakScreenProps {
   match: MatchData;
@@ -96,9 +97,9 @@ export function InningsBreakScreen({
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 200 }}
-            className="text-3xl mb-2"
+            className="mb-2 text-accent"
           >
-            🏏
+            <BatIcon size={32} />
           </motion.div>
           <h2 className="text-xl font-bold text-t1">Innings Break</h2>
         </div>
