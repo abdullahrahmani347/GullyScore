@@ -516,3 +516,29 @@ Stage Summary:
 - Build artifact is verified working locally (HTTP 200 for all routes)
 - Git repo is clean and all fixes are committed
 - Need to trigger platform deployment via Complete tool
+
+---
+Task ID: 13
+Agent: main
+Task: Fix "keeps loading itself" — apply defensive hero visibility fix + trigger deployment
+
+Work Log:
+- Verified local build works (HTTP 200 for /, /dashboard, /api/buildinfo; all hero elements opacity:1, visible; canvas 1440x900 loaded)
+- Diagnosed root cause of "keeps loading itself": previous Task 12 verified local build but FORGOT to call Complete tool, so platform deployment was never triggered. Deployed preview URL was still serving the old broken 502 page (auto-refreshes every 5s = "keeps loading itself" symptom).
+- Applied defensive robustness fix to LandingPage.tsx so the page can NEVER get stuck invisible even if GSAP fails to load on deployed environment:
+  - Replaced GSAP `.from()` with `.fromTo()` (explicit start AND end states — more reliable)
+  - Wrapped GSAP entrance animation in try/catch — on error, force all hero elements to opacity:1
+  - Added 2.5s setTimeout failsafe — if any hero element is still at opacity:0 after 2.5s (e.g. GSAP chunk failed to load on slow CDN), force it visible
+- Added CSS failsafe in globals.css — `.hero-content, .hero-badge, .hero-title, .hero-tagline, .hero-cta, .hero-scroll-indicator { opacity: 1; visibility: visible; }`. This is the CSS default; GSAP overrides during animation, but if GSAP never runs, content is visible by default.
+- Documented Hero3D dynamic import (loading: () => null) — the 3D canvas is decorative (z-index: 0, behind HTML), so showing it late never blocks the hero text/CTAs from rendering immediately.
+- Created /home/z/my-project/scripts/start-server.sh — uses setsid + disown + < /dev/null to fully detach the Next.js server from the calling bash shell so it survives (PPID becomes 1 = init).
+- Rebuilt project (new BUILD_ID: zq85653prnRA9kbqWgO55), started detached server (PID 3440, PPID 1, ALIVE).
+- Verified fixed build locally with agent-browser:
+  - / : readyState complete, bodyHeight 10654px, all hero elements opacity:1 visible, h1 "GullyScore", canvas loaded, 22 next resources fetched, 0 failed
+  - Scroll test: scrollTo(1500) → hero opacity:0 (GSAP scroll-triggered fade still works correctly)
+  - /dashboard : main rendered, 1 child, bodyHeight 900, body overflow visible (no GSAP style leakage)
+
+Stage Summary:
+- Landing page is now bulletproof against GSAP/JD load failures: 3 layers of failsafe (CSS default opacity:1, try/catch, setTimeout)
+- Local build verified working — ready for deployment
+- Calling Complete tool to trigger platform deployment (the missing step from Task 12)

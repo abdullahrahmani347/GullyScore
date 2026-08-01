@@ -33,7 +33,11 @@ import Link from 'next/link';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
-// Dynamically import the R3F canvas — no SSR (Three.js needs window)
+// Dynamically import the R3F canvas — no SSR (Three.js needs window).
+// Loading fallback is null (transparent) so the HTML hero is never blocked
+// by the 3D canvas loading. The canvas is decorative (z-index: 0, behind
+// all HTML), so showing it late is fine — the hero text/buttons render
+// immediately because they live in plain HTML above the canvas.
 const Hero3D = dynamic(() => import('./Hero3D'), {
   ssr: false,
   loading: () => null,
@@ -870,15 +874,38 @@ export default function LandingPage() {
       });
 
       // ── Hero section: entrance plays on mount (NOT scrubbed), exit is scrubbed ──
-      // Using .from() with scrub would leave content at opacity:0 at scroll 0,
-      // making the hero blank on page load. Instead, play the entrance on mount
-      // and use a separate scrubbed timeline for the scroll exit.
-      gsap.timeline({ delay: 0.15 })
-        .from('.hero-badge', { y: 16, opacity: 0, duration: 0.5, ease: 'power3.out' })
-        .from('.hero-title', { y: 24, opacity: 0, duration: 0.6, ease: 'power3.out' }, '-=0.3')
-        .from('.hero-tagline', { y: 16, opacity: 0, duration: 0.5, ease: 'power3.out' }, '-=0.35')
-        .from('.hero-cta', { y: 16, opacity: 0, duration: 0.5, ease: 'power3.out' }, '-=0.3')
-        .from('.hero-scroll-indicator', { opacity: 0, duration: 0.5, ease: 'power2.out' }, '-=0.2');
+      // Use .fromTo() with explicit end state (opacity: 1) so that even if GSAP
+      // is interrupted or fails to complete, the end state is well-defined.
+      // Also wrap in try/catch — if GSAP throws, the CSS fallback (opacity: 1
+      // by default on .hero-* classes, set in globals.css) keeps content visible.
+      try {
+        gsap.timeline({ delay: 0.15 })
+          .fromTo('.hero-badge', { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' })
+          .fromTo('.hero-title', { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' }, '-=0.3')
+          .fromTo('.hero-tagline', { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' }, '-=0.35')
+          .fromTo('.hero-cta', { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' }, '-=0.3')
+          .fromTo('.hero-scroll-indicator', { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, '-=0.2');
+      } catch (e) {
+        // If GSAP fails, force all hero elements visible immediately
+        document.querySelectorAll<HTMLElement>('.hero-badge, .hero-title, .hero-tagline, .hero-cta, .hero-scroll-indicator, .hero-content').forEach((el) => {
+          el.style.opacity = '1';
+          el.style.transform = 'none';
+          el.style.visibility = 'visible';
+        });
+      }
+
+      // Hard failsafe: if for any reason hero elements are still at opacity:0
+      // after 2.5s (e.g. GSAP chunk failed to load on slow networks), force
+      // them visible. This guarantees the hero is NEVER stuck blank.
+      setTimeout(() => {
+        document.querySelectorAll<HTMLElement>('.hero-badge, .hero-title, .hero-tagline, .hero-cta, .hero-scroll-indicator').forEach((el) => {
+          const op = getComputedStyle(el).opacity;
+          if (op === '0') {
+            el.style.opacity = '1';
+            el.style.transform = 'none';
+          }
+        });
+      }, 2500);
 
       // Hero scroll exit (scrubbed + pinned)
       gsap.timeline({

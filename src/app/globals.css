@@ -108,6 +108,23 @@ body { background: var(--color-bg-app); min-height: 100dvh; }
   -webkit-overflow-scrolling: touch;
 }
 
+/* ── Hero visibility failsafe ──
+   GSAP .fromTo() animates these from opacity:0 → opacity:1 on mount.
+   But if the GSAP chunk fails to load (slow CDN, blocked script, JS error),
+   the elements would otherwise remain at their default opacity. By setting
+   opacity:1 here as the CSS default, we GUARANTEE the hero is visible even
+   if GSAP never runs. GSAP will still override to opacity:0 momentarily
+   during the entrance animation, which is fine. */
+.hero-content,
+.hero-badge,
+.hero-title,
+.hero-tagline,
+.hero-cta,
+.hero-scroll-indicator {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* Dialog/Sheet overrides for theme */
 [data-slot="dialog-content"] {
   background: var(--color-bg-card) !important;
