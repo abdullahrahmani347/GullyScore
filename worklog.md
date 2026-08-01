@@ -581,3 +581,75 @@ Stage Summary:
 - Standalone size reduced by 0.9MB (no Three.js bundles in landing page chunk)
 - Mobile: no WebGL dependency, all CSS animations GPU-composited
 - Calling Complete tool to trigger platform deployment
+
+---
+Task ID: 15
+Agent: main
+Task: Make landing page less generic-AI + speed up scroll further
+
+Work Log:
+- User feedback: "still too generic and AI-made". Diagnosed AI tells in the existing copy/layout:
+  * "Cricket scoring, reimagined" badge (most overused AI phrase)
+  * Triple parallelism: "Every ball. Every run. Every wicket." / "No signup. No setup. Just cricket."
+  * Emoji icons in feature cards (🤝 🏏 🎯 ⚡ ✨ 📜) — instant AI tell
+  * Identical "Sentence. **Accent sentence.**" headline pattern in all 7 sections
+  * "Ball-by-ball engine" / "Tournament mode" / "Live spectator mode" eyebrow badges
+  * "Ready when you are" / "Start scoring in 2 taps" CTA filler
+  * "Built with Next.js · React Three Fiber · GSAP · Prisma" footer (also outdated — we removed R3F)
+  * "Cricket scoring, simplified" footer tagline
+  * All sections centered (textbook SaaS template layout)
+
+- Speed-up changes:
+  * Pin distance: +=35% → +=18% (49% reduction across all 7 sections)
+  * Scrub: 0.2 → 0.1 (50% faster animation catch-up)
+  * bodyHeight: 9079px → 7993px (12% shorter total scroll)
+  * Total scroll: 8.88× viewport (down from 11.8× originally — 25% faster overall)
+
+- Voice redesign — "Match-day program" editorial aesthetic:
+  * Hero: replaced centered template with asymmetric left-aligned layout
+    - Top status strip "● Live · gully season / v3.0" (looks like a match ticker, not marketing)
+    - New headline "Score the match. *Not your* data." (mixed weights, italic, accent)
+    - Tagline rewrites to specific cricket subcultures: "Tape ball. Tennis ball. Last man stands. Sunday morning, 6-over thrashes on a concrete pitch."
+    - Single CTA "Bowl the first ball" (no "Watch how it works" filler)
+    - Scroll indicator moved to bottom-right (not centered)
+  * SectionHeading: removed eyebrow pill badges, replaced with editorial numbering "01 / SCORING", "02 / LEAGUES", etc. Default alignment switched from center → left.
+  * All 7 section headlines rewritten to break the "Sentence. Accent sentence." pattern:
+    - 01 Scoring: "Tap the ball. Tap the runs. The scorecard builds itself."
+    - 02 Leagues: "Six teams. One tap. Full fixture, NRR, the lot."
+    - 03 Spectators: "Send a URL. They watch the match."
+    - 04 Charts: "The run-rate worm draws itself."
+    - 05 The pitch: "Built for the matches nobody else scores."
+    - 06 Play (CTA): "First ball in 30 seconds."
+  * All subheads rewritten — longer, specific, with cricket vernacular instead of generic marketing speak. Examples:
+    - "no spreadsheet, no WhatsApp group chat full of fixtures nobody reads"
+    - "Five-over tape-ball on a parking lot. Last-man-stands on a Sunday morning. Box-cricket tournaments in the society compound."
+  * Feature icons: replaced emoji (🤝 🏏 🎯 ⚡ ✨ 📜) with cricket scorecard notation chips in monospace boxes: P / SR / M / CRR / Wd / •
+  * CTA cleanup:
+    - Removed "Ready when you are" eyebrow badge
+    - Removed "Works offline / No account / Just cricket" triple-bullet feature row
+    - Removed "Built with Next.js · React Three Fiber · GSAP · Prisma" footer line (outdated + tech-stack brag)
+    - Removed "Cricket scoring, simplified" tagline
+    - New footer tagline: "made for the matches nobody else scores"
+    - Removed "© 2026 GullyScore" boilerplate
+  * Section wrapper: removed `justify-center` so left-aligned content stays left
+
+- VLM ratings (local, agent-browser 1440x900):
+  - Hero: 9/10 originality — "significant personality", "authentic to street cricket culture", "clever pun on Score"
+  - Section 02: 8/10 — "hand-crafted, conversational", "scorecard notation as UI elements is a clever touch"
+  - CTA: 7/10 — "micro-copy is excellent", "fresh, user-centric"
+
+- Verified locally:
+  - bodyHeight 7993px (8.88× viewport, down from 11.8× = 25% faster scroll)
+  - Hero opacity 1, all elements visible
+  - Dashboard transition clean (body overflow visible, bodyHeight 900, no GSAP leakage)
+  - 0 console errors
+  - Full-page scroll completes in ~4s (was ~6s, was ~9s originally)
+
+Stage Summary:
+- Replaced every AI-generic phrase with hand-crafted cricket-vernacular copy
+- Hero redesigned as asymmetric editorial layout (left-aligned, mixed weights, italic)
+- All section headings now numbered editorial style ("01 / SCORING")
+- Emoji icons → cricket scorecard notation chips (P/SR/M/CRR/Wd/•)
+- Footer cleaned of tech-stack brag and boilerplate
+- Scroll 25% faster overall (11.8× → 8.88× viewport)
+- Calling Complete to trigger deployment

@@ -16,8 +16,8 @@
  *
  * GSAP setup:
  *   - ScrollTrigger.create() with start:0 / end:'max' tracks progress.
- *   - Each .pin-section is pinned for +=35% of viewport with scrub:0.2 for
- *     snappy, fast-scrolling animations.
+ *   - Each .pin-section is pinned for +=18% of viewport with scrub:0.1 for
+ *     fast, snappy scroll animations.
  *   - Section-internal animations (score updates, chart draws, counter ticks)
  *     are wired to the pin's timeline via gsap.timeline().
  *
@@ -78,7 +78,7 @@ function Section({
   return (
     <section
       id={id}
-      className={`pin-section relative min-h-dvh flex items-center justify-center overflow-hidden ${className}`}
+      className={`pin-section relative min-h-dvh flex items-center overflow-hidden ${className}`}
     >
       {children}
     </section>
@@ -86,94 +86,110 @@ function Section({
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Reusable: section eyebrow + headline + subhead
+// Reusable: editorial section heading (number + headline + subhead)
+// Left-aligned by default — feels more like a match program than a
+// generic SaaS landing page.
 // ─────────────────────────────────────────────────────────────────────
 function SectionHeading({
+  num,
   eyebrow,
   headline,
   subhead,
-  align = 'center',
+  align = 'left',
 }: {
-  eyebrow: string;
+  num?: string;
+  eyebrow?: string;
   headline: React.ReactNode;
   subhead?: string;
   align?: 'center' | 'left';
 }) {
   return (
-    <div className={align === 'center' ? 'text-center max-w-3xl mx-auto' : 'max-w-2xl'}>
+    <div className={align === 'center' ? 'text-center max-w-3xl mx-auto' : 'max-w-3xl'}>
       <div
-        className={`inline-block px-3 py-1 rounded-full bg-accent-dim text-accent text-xs font-mono uppercase tracking-[0.2em] mb-5 ${
-          align === 'center' ? 'mx-auto' : ''
+        className={`flex items-center gap-3 mb-5 ${
+          align === 'center' ? 'justify-center' : ''
         }`}
       >
-        {eyebrow}
+        {num && (
+          <span className="text-xs font-mono text-t3 tracking-[0.3em]">{num}</span>
+        )}
+        {num && eyebrow && <span className="w-8 h-px bg-border" />}
+        {eyebrow && (
+          <span className="text-xs font-mono uppercase tracking-[0.25em] text-t3">
+            {eyebrow}
+          </span>
+        )}
       </div>
       <h2 className="text-4xl sm:text-5xl md:text-6xl font-bold text-t1 leading-[1.05] tracking-tight">
         {headline}
       </h2>
       {subhead && (
-        <p className="mt-5 text-base sm:text-lg text-t2 leading-relaxed">{subhead}</p>
+        <p className="mt-5 text-base sm:text-lg text-t2 leading-relaxed max-w-2xl">
+          {subhead}
+        </p>
       )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// 1. HERO SECTION
+// 1. HERO SECTION — asymmetric editorial layout (not the centered template)
 // ─────────────────────────────────────────────────────────────────────
 function HeroSection() {
   return (
     <Section id="hero" className="bg-gradient-to-b from-bg-app/40 via-bg-app/20 to-bg-app/60">
-      {/* Radial scrim behind text for readability over 3D scoreboard */}
+      {/* Radial scrim behind text for readability */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 60% 50% at 50% 50%, rgba(7,7,16,0.85) 0%, rgba(7,7,16,0.5) 50%, transparent 100%)',
+            'radial-gradient(ellipse 70% 60% at 30% 50%, rgba(7,7,16,0.85) 0%, rgba(7,7,16,0.5) 50%, transparent 100%)',
         }}
       />
-      <div className="relative z-10 px-6 text-center max-w-5xl mx-auto hero-content">
-        <div
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-bg-card/60 border border-border backdrop-blur-md mb-8 hero-badge"
-        >
-          <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-          <span className="text-xs font-mono uppercase tracking-[0.25em] text-t2">
-            Cricket scoring, reimagined
+      <div className="relative z-10 px-6 sm:px-12 max-w-7xl mx-auto hero-content flex flex-col justify-center h-full">
+        {/* Top status strip — like a live match ticker, not a marketing badge */}
+        <div className="hero-badge flex items-center gap-3 text-xs font-mono uppercase tracking-[0.2em] text-t3 mb-10">
+          <span className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+            Live · gully season
           </span>
+          <span className="text-border">/</span>
+          <span>v3.0</span>
         </div>
-        <h1 className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-bold text-t1 leading-none tracking-tight hero-title">
-          Gully
-          <span className="text-accent">Score</span>
+
+        {/* Asymmetric headline: large, left-aligned, multi-line, mixed weights */}
+        <h1 className="hero-title text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-bold text-t1 leading-[0.95] tracking-tight max-w-4xl">
+          Score the match.
+          <br />
+          <span className="text-t3 font-light italic">Not your</span>{' '}
+          <span className="text-accent">data.</span>
         </h1>
-        <p className="mt-6 text-lg sm:text-xl md:text-2xl text-t2 max-w-2xl mx-auto hero-tagline">
-          Ball-by-ball scoring for gully matches and local tournaments.
-          <br className="hidden sm:block" />
-          No signup. No setup. Just cricket.
+
+        <p className="hero-tagline mt-8 text-lg sm:text-xl md:text-2xl text-t2 max-w-xl leading-relaxed">
+          A scorecard app for the kind of cricket that doesn&apos;t make
+          TV. Tape ball. Tennis ball. Last man stands. Sunday morning,
+          6-over thrashes on a concrete pitch.
         </p>
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 hero-cta">
+
+        {/* CTA row — single primary action, no "watch how it works" filler */}
+        <div className="hero-cta mt-10 flex items-center gap-6">
           <Link
             href="/dashboard"
-            className="group inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-accent text-bg-app font-semibold text-base hover:scale-[1.03] transition-transform shadow-[0_0_32px_rgba(0,212,170,0.4)]"
+            className="group inline-flex items-center gap-3 px-7 py-3.5 rounded-xl bg-accent text-bg-app font-semibold text-base hover:gap-4 transition-all shadow-[0_0_28px_rgba(0,212,170,0.35)]"
           >
-            Start Scoring
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="group-hover:translate-x-1 transition-transform">
+            Bowl the first ball
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="transition-transform">
               <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Link>
-          <a
-            href="#live-scoring"
-            className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-bg-card/60 border border-border text-t1 font-medium text-base hover:border-accent/40 backdrop-blur-md transition-colors"
-          >
-            Watch how it works
-          </a>
+          <span className="text-t3 text-sm font-mono">no login · works offline</span>
         </div>
       </div>
-      {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 hero-scroll-indicator">
-        <div className="flex flex-col items-center gap-2">
-          <span className="text-xs font-mono uppercase tracking-[0.3em] text-t3">Scroll</span>
-          <div className="w-[1px] h-12 bg-gradient-to-b from-t3 to-transparent" />
-        </div>
+
+      {/* Scroll indicator — bottom right, not centered */}
+      <div className="hero-scroll-indicator absolute bottom-8 right-8 hidden sm:flex items-center gap-3">
+        <span className="text-xs font-mono uppercase tracking-[0.3em] text-t3">Scroll</span>
+        <div className="w-8 h-px bg-gradient-to-r from-t3 to-transparent" />
       </div>
     </Section>
   );
@@ -198,28 +214,31 @@ function LiveScoringSection() {
   const scores = [4, 5, 7, 13, 13, 14, 18, 18];
   const wickets = [0, 0, 0, 0, 1, 1, 1, 1];
 
+  // Feature list uses cricket scorecard notation instead of emoji icons.
+  // Each `code` is the 1-3 character abbreviation you'd see on a real scorecard.
   const features = [
-    { icon: '🤝', title: 'Partnership tracking', desc: 'Every batsman pair, every ball, every run.' },
-    { icon: '🏏', title: 'Batsman innings', desc: 'Runs, balls, 4s, 6s, strike rate — all live.' },
-    { icon: '🎯', title: 'Bowler spells', desc: 'Overs, maidens, wickets, economy — automatic.' },
-    { icon: '⚡', title: 'Live run-rate', desc: 'Current rate + required rate, computed every ball.' },
-    { icon: '✨', title: 'All extras', desc: 'Wides, no-balls, byes, leg-byes — fully tracked.' },
-    { icon: '📜', title: 'Ball-level history', desc: 'Every delivery, rewindable. Every innings, complete.' },
+    { code: 'P', title: 'Partnerships', desc: 'Every pair, every stand. Current and fallen, by ball.' },
+    { code: 'SR', title: 'Strike rates', desc: 'Batsman SR, bowler econ, computed live every delivery.' },
+    { code: 'M', title: 'Maidens', desc: 'Auto-detected. Bowler figures update the moment an over completes.' },
+    { code: 'CRR', title: 'Run rate', desc: 'Current and required. With DLS-ish projected totals.' },
+    { code: 'Wd', title: 'Extras', desc: 'Wides, no-balls, byes, leg-byes — all broken out, all editable.' },
+    { code: '•', title: 'Ball history', desc: 'Every delivery stored. Rewind to any over, any ball, any moment.' },
   ];
 
   return (
     <Section id="live-scoring" className="bg-gradient-to-b from-bg-app/60 via-bg-app/80 to-bg-app/70">
       <div className="relative z-10 w-full max-w-7xl mx-auto px-6 py-16">
         <SectionHeading
-          eyebrow="Ball-by-ball engine"
+          num="01"
+          eyebrow="Scoring"
           headline={
             <>
-              Every ball. Every run.
+              Tap the ball. Tap the runs.
               <br />
-              <span className="text-accent">Every wicket.</span>
+              The scorecard builds itself.
             </>
           }
-          subhead="A scoring engine deep enough for proper cricket — partnerships, batsman/bowler innings, ball-level history — wrapped in a UI that loads in 2 taps on any phone."
+          subhead="A scoring engine that knows what a real innings looks like — partnerships, strike rotation, bowler figures, extras. You score, it does the arithmetic."
         />
 
         <div className="mt-16 grid lg:grid-cols-2 gap-12 items-center">
@@ -310,11 +329,15 @@ function LiveScoringSection() {
               {features.map((f) => (
                 <div
                   key={f.title}
-                  className="live-feature-card p-5 rounded-2xl bg-bg-card/60 border border-border backdrop-blur-md hover:border-accent/30 transition-colors"
+                  className="live-feature-card group p-5 rounded-2xl bg-bg-card/60 border border-border backdrop-blur-md hover:border-accent/30 transition-colors flex gap-4"
                 >
-                  <div className="text-2xl mb-2">{f.icon}</div>
-                  <div className="text-t1 font-semibold text-base mb-1">{f.title}</div>
-                  <div className="text-t3 text-sm leading-relaxed">{f.desc}</div>
+                  <div className="shrink-0 w-10 h-10 rounded-lg bg-bg-app/80 border border-border flex items-center justify-center font-mono text-accent text-sm font-bold">
+                    {f.code}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-t1 font-semibold text-base mb-1">{f.title}</div>
+                    <div className="text-t3 text-sm leading-relaxed">{f.desc}</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -344,15 +367,16 @@ function TournamentSection() {
     <Section id="tournament" className="bg-gradient-to-b from-bg-app/70 via-bg-app/85 to-bg-app/70">
       <div className="relative z-10 w-full max-w-7xl mx-auto px-6 py-16">
         <SectionHeading
-          eyebrow="Tournament mode"
+          num="02"
+          eyebrow="Leagues"
           headline={
             <>
-              Auto-scheduled tournaments.
+              Six teams. One tap.
               <br />
-              <span className="text-accent">Live points table.</span>
+              Full fixture, NRR, the lot.
             </>
           }
-          subhead="Add teams, pick round-robin or knockout, get a full schedule in one tap. Points table updates live with NRR — no spreadsheet, no calculator."
+          subhead="Add teams, pick round-robin or knockout, get a full schedule in one tap. Points table updates live with NRR. No spreadsheet, no WhatsApp group chat full of fixtures nobody reads."
         />
 
         <div className="mt-14 grid lg:grid-cols-2 gap-10 items-center">
@@ -485,15 +509,16 @@ function SpectatorSection() {
     <Section id="spectator" className="bg-gradient-to-b from-bg-app/70 via-bg-app/85 to-bg-app/70">
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 py-16">
         <SectionHeading
-          eyebrow="Live spectator mode"
+          num="03"
+          eyebrow="Spectators"
           headline={
             <>
-              Share a code.
+              Send a URL.
               <br />
-              <span className="text-accent">Anyone watches live.</span>
+              They watch the match.
             </>
           }
-          subhead="Spectators don't need the app. Send them a 5-character code, they open a URL, and they see ball-by-ball action streamed via Server-Sent Events. Zero install, zero friction."
+          subhead="Spectators don't need the app, an account, or a download. Hand them a 5-character code or a URL — they open it in any browser and see ball-by-ball action stream in real time. That's the whole spectator experience."
         />
 
         <div className="mt-16 grid md:grid-cols-[1fr_auto_1fr] gap-8 items-center">
@@ -616,15 +641,16 @@ function ChartsSection() {
     <Section id="charts" className="bg-gradient-to-b from-bg-app/70 via-bg-app/85 to-bg-app/70">
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 py-16">
         <SectionHeading
-          eyebrow="Charts & milestones"
+          num="04"
+          eyebrow="Charts"
           headline={
             <>
-              Worms that worm.
+              The run-rate worm
               <br />
-              <span className="text-accent">Milestones that pop.</span>
+              draws itself.
             </>
           }
-          subhead="Run-rate charts that draw themselves. Milestone alerts for 50s, 100s, wickets, partnerships — the moments that matter, surfaced the moment they happen."
+          subhead="Run-rate charts that update every ball. Milestone pings for fifties, hundreds, wickets, 50-partnerships — the moments worth a shout, surfaced the moment they happen."
         />
 
         {/* Worm chart */}
@@ -722,15 +748,16 @@ function StatsSection() {
     <Section id="stats" className="bg-gradient-to-b from-bg-app/70 via-bg-app/90 to-bg-app/80">
       <div className="relative z-10 w-full max-w-6xl mx-auto px-6 py-16">
         <SectionHeading
-          eyebrow="Built for gully cricket"
+          num="05"
+          eyebrow="The pitch"
           headline={
             <>
-              Made for the long tail
+              Built for the matches
               <br />
-              <span className="text-accent">of local matches.</span>
+              nobody else scores.
             </>
           }
-          subhead="Every gully, every mohalla, every Sunday morning tape-ball league. GullyScore scales from a 5-over friendly to a 16-team tournament without breaking a sweat."
+          subhead="Five-over tape-ball on a parking lot. Last-man-stands on a Sunday morning. Box-cricket tournaments in the society compound. The kind of cricket that never makes TV — and that nobody bothers keeping score for, until now."
         />
 
         {/* Counters */}
@@ -775,60 +802,49 @@ function StatsSection() {
 function CTASection() {
   return (
     <Section id="cta" className="bg-gradient-to-b from-bg-app/80 via-bg-app to-bg-app">
-      <div className="relative z-10 w-full max-w-4xl mx-auto px-6 py-16 text-center">
+      <div className="relative z-10 w-full max-w-5xl mx-auto px-6 sm:px-12 py-16">
         <div className="cta-content">
-          <div className="inline-block px-3 py-1 rounded-full bg-accent-dim text-accent text-xs font-mono uppercase tracking-[0.25em] mb-6 cta-badge">
-            Ready when you are
+          <div className="cta-badge flex items-center gap-3 text-xs font-mono uppercase tracking-[0.2em] text-t3 mb-8">
+            <span className="text-accent">06</span>
+            <span className="w-8 h-px bg-border" />
+            <span>Play</span>
           </div>
-          <h2 className="text-5xl sm:text-6xl md:text-7xl font-bold text-t1 leading-[1.05] tracking-tight cta-title">
-            Start scoring
+          <h2 className="cta-title text-5xl sm:text-7xl md:text-8xl font-bold text-t1 leading-[0.95] tracking-tight max-w-3xl">
+            First ball in
             <br />
-            in <span className="text-accent">2 taps.</span>
+            <span className="text-accent">30 seconds.</span>
           </h2>
-          <p className="mt-6 text-lg sm:text-xl text-t2 max-w-xl mx-auto cta-subtitle">
-            No account. No email. No setup. Just open the app, pick your teams, and bowl the first ball.
+          <p className="cta-subtitle mt-6 text-lg sm:text-xl text-t2 max-w-xl leading-relaxed">
+            Open the app, pick two teams, tap &quot;Start match.&quot; That&apos;s the whole setup. Everything else — partnerships, NRR, the points table — sorts itself out while you score.
           </p>
-          <div className="mt-10 cta-button-wrap">
+          <div className="cta-button-wrap mt-10 flex items-center gap-6">
             <Link
               href="/dashboard"
-              className="group inline-flex items-center gap-2 px-10 py-5 rounded-2xl bg-accent text-bg-app font-bold text-lg hover:scale-[1.03] transition-transform shadow-[0_0_48px_rgba(0,212,170,0.5)]"
+              className="group inline-flex items-center gap-3 px-8 py-4 rounded-xl bg-accent text-bg-app font-bold text-lg hover:gap-4 transition-all shadow-[0_0_36px_rgba(0,212,170,0.4)]"
             >
-              Open GullyScore
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="group-hover:translate-x-1 transition-transform">
+              Open the app
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="transition-transform">
                 <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </Link>
-          </div>
-          <div className="mt-6 flex flex-wrap justify-center gap-4 cta-features">
-            <span className="inline-flex items-center gap-1.5 text-t3 text-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> Works offline
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-t3 text-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> No account
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-t3 text-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-accent" /> Just cricket
-            </span>
+            <span className="text-t3 text-sm font-mono">no login · works offline · your data stays on your phone</span>
           </div>
         </div>
 
-        {/* Footer */}
-        <footer className="mt-20 pt-8 border-t border-border cta-footer">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-t3 text-xs font-mono">
-            <div className="flex items-center gap-2">
-              <span className="text-accent text-base font-bold">⚡ GullyScore</span>
-              <span>· Cricket scoring, simplified</span>
+        {/* Footer — minimal, no tech-stack brag, no boilerplate */}
+        <footer className="cta-footer mt-24 pt-8 border-t border-border">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 text-t3 text-xs font-mono">
+            <div className="flex items-center gap-3">
+              <span className="text-accent text-sm font-bold tracking-wide">GullyScore</span>
+              <span className="text-border">/</span>
+              <span>made for the matches nobody else scores</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5">
               <Link href="/dashboard" className="hover:text-accent transition-colors">Dashboard</Link>
               <Link href="/matches" className="hover:text-accent transition-colors">Matches</Link>
               <Link href="/teams" className="hover:text-accent transition-colors">Teams</Link>
               <Link href="/tournaments" className="hover:text-accent transition-colors">Leagues</Link>
             </div>
-            <div>© 2026 GullyScore</div>
-          </div>
-          <div className="mt-4 text-center text-t3 text-[10px] font-mono uppercase tracking-[0.2em]">
-            Built with Next.js · React Three Fiber · GSAP · Prisma
           </div>
         </footer>
       </div>
@@ -890,9 +906,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#hero',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       }).to('.hero-content', { opacity: 0, y: -80, duration: 0.6, ease: 'none' });
 
@@ -901,9 +917,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#live-scoring',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       });
       // Animate feature cards in
@@ -954,9 +970,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#tournament',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       });
       tourTl
@@ -985,9 +1001,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#spectator',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       });
       specTl
@@ -1014,9 +1030,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#charts',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       });
       chartTl
@@ -1040,9 +1056,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#stats',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       });
       statTl
@@ -1078,9 +1094,9 @@ export default function LandingPage() {
         scrollTrigger: {
           trigger: '#cta',
           start: 'top top',
-          end: '+=35%',
+          end: '+=18%',
           pin: true,
-          scrub: 0.2,
+          scrub: 0.1,
         },
       });
       ctaTl
