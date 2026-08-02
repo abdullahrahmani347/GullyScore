@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# Local SQLite database — should never be committed
+db/*.db
+db/*.db-journal
+
 # vercel
 .vercel
 
@@ -50,6 +54,10 @@ test
 prompt
 
 server.log
+
+# Runtime PID files
+.zscripts/dev.pid
+.zscripts/*.pid
 
 # Build artifacts / test outputs — should never be deployed
 /download/
