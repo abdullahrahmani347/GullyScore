@@ -719,3 +719,17 @@ Stage Summary:
 - New GullyIcons library: 27 custom SVG icons in unified house style
 - Intentionally kept: team emoji picker (user data), share text (external consumption), scorecard notation (domain convention)
 - Calling Complete to trigger deployment
+
+---
+Task ID: 17
+Agent: Main Agent
+Task: Produce the GullyScore v2 "Championship Edition" master enhancement prompt (production-ready improvements, features, functionality, UI/UX additions)
+
+Work Log:
+- Read full worklog (Tasks 1-16) to ground the prompt in the real implementation state (device isolation, deployment hardening, theme toggle, achievements, partnerships, GullyIcons brand system)
+- Inspected actual prisma/schema.prisma and package.json to reference real models/fields (deliveryNumber, strikerIdBefore, isLegalDelivery, BatsmanInnings/BowlerInnings/Partnership) and already-installed deps (sharp, html2canvas, next-intl, @dnd-kit, z-ai-web-dev-sdk)
+- Authored a 14-section (S11-S24) enhancement prompt continuing the v1 Master Build Prompt numbering, saved to /home/z/my-project/download/GULLYSCORE_V2_ENHANCEMENT_PROMPT.md
+
+Stage Summary:
+- v2 prompt covers: free-hit state machine, powerplays, Gully-DLS, retired-hurt return, penalties, mankad/obstructing-field, event-sourced undo + ball editing with clientEventId idempotency, 8-ball overs, per-match house-rules JSON, cricket correctness fixes (bowler analysis, balls faced, maidens, last-ball strike parity), win probability, wagon wheel, pitch map, matchup matrix, MVP index, player career pages, turning points, AI match report, scoring UX v2 (haptics/sound/TTS, landscape pro mode, ball editor, smart suggestions, keyboard shortcuts, toss wizard, voice scoring flag-gated), live spectator v2 (hub, web push, OG/story cards, reactions, catch-me-up, embed widget, SSE Last-Event-ID replay), offline v2 (Background Sync, Web Locks scorer lock, storage hygiene), tournaments v2 (bracket, schedule editor + ICS, tiebreakers, leaderboards, exports), additive Prisma diff with backfill assertions, API v2 with error envelope + rate limits + identity portability (backup codes fixing the one-device lock-in), observability/backup hardening, WCAG 2.1 AA, en/hi/ur i18n with Urdu RTL, first real test suite (Vitest property tests, golden fixtures, Playwright E2E, Lighthouse gates), and a 3-phase rollout plan
+- Deliverable: /home/z/my-project/download/GULLYSCORE_V2_ENHANCEMENT_PROMPT.md (copy-paste-ready companion to the v1 spec)
