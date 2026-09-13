@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ensureDbSchema } from "@/lib/db";
+import { getFeatures } from "@/lib/features";
 
 /**
  * GULLYSCORE DIAGNOSTIC ENDPOINT — /api/buildinfo
@@ -51,6 +52,14 @@ export async function GET() {
     dbError = e instanceof Error ? e.message : String(e);
   }
 
+  // v2 §11.4 — feature flags served here (server + client gate from this).
+  let features: Record<string, boolean> | { error: string };
+  try {
+    features = getFeatures();
+  } catch (e) {
+    features = { error: e instanceof Error ? e.message : String(e) };
+  }
+
   return NextResponse.json({
     marker: process.env.GULLYSCORE_BUILD_MARKER ?? "dev-no-marker",
     builtAt: process.env.BUILD_TIMESTAMP ?? "unset",
@@ -75,6 +84,7 @@ export async function GET() {
       : "unset",
     dbStatus,
     dbError,
+    features,
     timestamp: new Date().toISOString(),
   });
 }

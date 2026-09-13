@@ -1,0 +1,23 @@
+{
+  "generatedAt": "2026-09-13T06:49:24.264Z",
+  "fixtures": [
+    {
+      "file": "cmtzgdy6n000jst8cqdzrcwwd-i1.json",
+      "matchId": "cmtzgdy6n000jst8cqdzrcwwd",
+      "inningsNumber": 1,
+      "balls": 38,
+      "runs": 43,
+      "wickets": 4,
+      "label": "match zrcwwd · innings 1 · 43/4 (6.0)"
+    },
+    {
+      "file": "cmtzgdy6n000jst8cqdzrcwwd-i2.json",
+      "matchId": "cmtzgdy6n000jst8cqdzrcwwd",
+      "inningsNumber": 2,
+      "balls": 20,
+      "runs": 45,
+      "wickets": 3,
+      "label": "match zrcwwd · innings 2 · 45/3 (3.1)"
+    }
+  ]
+}

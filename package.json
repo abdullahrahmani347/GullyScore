@@ -7,10 +7,14 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && (bun scripts/prune-standalone.mjs || echo 'prune skipped')",
     "start": "NODE_ENV=production node .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
-    "db:push": "prisma db push",
+    "test": "bun test",
+    "test:engine": "bun test src/lib/engine.test.ts",
+    "db:push": "node scripts/db-push-guard.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
+    "check:budgets": "node scripts/check-budgets.mjs",
+    "fixtures:golden": "bun scripts/play-golden-match.ts && bun scripts/generate-golden-fixtures.ts",
     "seed": "bunx tsx prisma/seed.ts"
   },
   "dependencies": {

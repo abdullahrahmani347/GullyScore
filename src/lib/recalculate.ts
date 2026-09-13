@@ -1,141 +1,145 @@
+/**
+ * GULLYSCORE v2 §11.2 — recalculate.ts as a THIN DB WRITER around fold()
+ * ---------------------------------------------------------------------------
+ * v1 re-applied every ball one-by-one with a DB round-trip per ball (~3
+ * queries × N balls) and had two defects: it never reset/recomputed MAIDENS
+ * (stale values survived a recalculation) and it re-derived the striker
+ * state starting from the CURRENT pair instead of the opening pair.
+ *
+ * v2 computes the full innings state ONCE in memory with the pure engine
+ * (src/lib/engine.ts — the single source of truth) and writes the final
+ * aggregates. Behaviour for all counters is identical to v1's recordBall
+ * path (proven by the golden-fixture suite); the maiden + striker defects
+ * are fixed as a side effect of deriving from the event log.
+ *
+ * See docs/release-notes.md — "v2 §11.2 milestone" for the documented diff.
+ */
+
 import { db } from '@/lib/db';
+import { fold, defaultRules } from './engine';
 import { rebuildPartnerships } from './partnerships';
 
 export async function recalculate(inningsId: string): Promise<void> {
   const innings = await db.innings.findUniqueOrThrow({
     where: { id: inningsId },
-    include: { balls: { orderBy: { deliveryNumber: 'asc' } } },
-  });
-
-  // Reset innings counters
-  await db.innings.update({
-    where: { id: inningsId },
-    data: {
-      runs: 0, wickets: 0, completedOvers: 0, currentBalls: 0,
-      wideBalls: 0, noBalls: 0, byes: 0, legByes: 0,
+    include: {
+      match: true,
+      balls: { orderBy: { deliveryNumber: 'asc' } },
+      batting: true,
+      bowling: true,
     },
   });
 
-  // Reset all BatsmanInnings
-  const batting = await db.batsmanInnings.findMany({ where: { inningsId } });
-  for (const b of batting) {
-    await db.batsmanInnings.update({
-      where: { id: b.id },
-      data: { runs: 0, balls: 0, fours: 0, sixes: 0, isOut: false, dismissalType: null, dismissedByBowlerId: null, fielderPlayerId: null },
-    });
-  }
+  // --- Derive everything from the event log (pure, no DB round-trips) -----
+  const rules = defaultRules({
+    maxWickets: innings.match.maxWickets,
+    totalOvers: innings.match.totalOvers,
+    inningsNumber: innings.inningsNumber,
+    target: innings.target,
+    // v1 parity: 6-ball overs, no free hits, no powerplays
+    ballsPerOver: 6,
+    freeHitOnNoBall: false,
+    powerplayOvers: 0,
+    lastManStands: false,
+  });
+  const state = fold(innings.balls, rules);
 
-  // Reset all BowlerInnings
-  const bowling = await db.bowlerInnings.findMany({ where: { inningsId } });
-  for (const b of bowling) {
-    await db.bowlerInnings.update({
-      where: { id: b.id },
-      data: { completedOvers: 0, balls: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0 },
-    });
-  }
+  // --- Write innings counters ----------------------------------------------
+  await db.innings.update({
+    where: { id: inningsId },
+    data: {
+      runs: state.runs,
+      wickets: state.wickets,
+      completedOvers: state.completedOvers,
+      currentBalls: state.currentBalls,
+      wideBalls: state.wideBalls,
+      noBalls: state.noBalls,
+      byes: state.byes,
+      legByes: state.legByes,
+      strikerId: state.strikerId,
+      nonStrikerId: state.nonStrikerId,
+      isCompleted: state.inningsComplete,
+    },
+  });
 
-  // Re-apply each ball
-  for (const ball of innings.balls) {
-    // Apply scoring logic for each ball sequentially
-    const isWide = ball.extraType === 'WIDE';
-    const isNoBall = ball.extraType === 'NO_BALL';
-    const isBye = ball.extraType === 'BYE';
-    const isLegBye = ball.extraType === 'LEG_BYE';
-    const isLegalDelivery = ball.isLegalDelivery;
-    const totalRuns = ball.runs + ball.extraRuns;
-    const runsAgainstBowler = (isBye || isLegBye) ? 0 : totalRuns;
-
-    // Get current innings state
-    const currentInnings = await db.innings.findUniqueOrThrow({ where: { id: inningsId } });
-    const currentLegalBalls = currentInnings.currentBalls;
-    const newBallInOver = isLegalDelivery ? currentLegalBalls + 1 : 0;
-    const isOverComplete = isLegalDelivery && newBallInOver === 6;
-
-    // Update BatsmanInnings
-    const batsmanDismissed = ball.isWicket && (ball.wicketType !== 'RUN_OUT' ? true : ball.dismissedPlayerId === ball.batsmanId);
+  // --- Write batting rows (preserve existing battingOrder) -----------------
+  const orderMap = new Map(innings.batting.map((b) => [b.playerId, b.battingOrder]));
+  for (const [playerId, s] of Object.entries(state.batting)) {
     await db.batsmanInnings.upsert({
-      where: { inningsId_playerId: { inningsId, playerId: ball.batsmanId } },
+      where: { inningsId_playerId: { inningsId, playerId } },
       create: {
-        inningsId, playerId: ball.batsmanId, battingOrder: 99,
-        runs: ball.runs, balls: isWide ? 0 : 1,
-        fours: ball.runs === 4 && !isBye && !isLegBye ? 1 : 0,
-        sixes: ball.runs === 6 && !isBye && !isLegBye ? 1 : 0,
-        isOut: batsmanDismissed,
-        dismissalType: batsmanDismissed ? ball.wicketType : null,
-        dismissedByBowlerId: batsmanDismissed && !['RUN_OUT','RETIRED_HURT'].includes(ball.wicketType!) ? ball.bowlerId : null,
-        fielderPlayerId: batsmanDismissed && ball.fielderPlayerId ? ball.fielderPlayerId : null,
+        inningsId,
+        playerId,
+        battingOrder: orderMap.get(playerId) ?? 99,
+        runs: s.runs,
+        balls: s.balls,
+        fours: s.fours,
+        sixes: s.sixes,
+        isOut: s.isOut,
+        dismissalType: s.dismissalType,
+        dismissedByBowlerId: s.dismissedByBowlerId,
+        fielderPlayerId: s.fielderPlayerId,
       },
       update: {
-        runs: { increment: ball.runs },
-        balls: { increment: isWide ? 0 : 1 },
-        fours: { increment: ball.runs === 4 && !isBye && !isLegBye ? 1 : 0 },
-        sixes: { increment: ball.runs === 6 && !isBye && !isLegBye ? 1 : 0 },
-        ...(batsmanDismissed ? { isOut: true, dismissalType: ball.wicketType, dismissedByBowlerId: !['RUN_OUT','RETIRED_HURT'].includes(ball.wicketType!) ? ball.bowlerId : null, fielderPlayerId: ball.fielderPlayerId ?? null } : {}),
-      },
-    });
-
-    // Non-striker run-out
-    if (ball.isWicket && ball.wicketType === 'RUN_OUT' && ball.dismissedPlayerId === ball.nonStrikerIdBefore) {
-      await db.batsmanInnings.upsert({
-        where: { inningsId_playerId: { inningsId, playerId: ball.nonStrikerIdBefore } },
-        create: { inningsId, playerId: ball.nonStrikerIdBefore, battingOrder: 99, isOut: true, dismissalType: 'RUN_OUT' },
-        update: { isOut: true, dismissalType: 'RUN_OUT' },
-      });
-    }
-
-    // Update BowlerInnings
-    const currentBowler = await db.bowlerInnings.findUnique({ where: { inningsId_playerId: { inningsId, playerId: ball.bowlerId } } });
-    const bowlerCurrentBalls = currentBowler?.balls ?? 0;
-    const bowlerNewBalls = isLegalDelivery ? (bowlerCurrentBalls + 1) % 6 : bowlerCurrentBalls;
-    const bowlerOverComplete = isLegalDelivery && (bowlerCurrentBalls + 1) === 6;
-
-    await db.bowlerInnings.upsert({
-      where: { inningsId_playerId: { inningsId, playerId: ball.bowlerId } },
-      create: {
-        inningsId, playerId: ball.bowlerId,
-        completedOvers: bowlerOverComplete ? 1 : 0, balls: bowlerNewBalls,
-        runs: runsAgainstBowler,
-        wickets: ball.isWicket && !['RUN_OUT','RETIRED_HURT'].includes(ball.wicketType!) ? 1 : 0,
-        wides: isWide ? 1 : 0, noBalls: isNoBall ? 1 : 0,
-      },
-      update: {
-        balls: bowlerNewBalls, runs: { increment: runsAgainstBowler },
-        ...(bowlerOverComplete ? { completedOvers: { increment: 1 } } : {}),
-        ...(ball.isWicket && !['RUN_OUT','RETIRED_HURT'].includes(ball.wicketType!) ? { wickets: { increment: 1 } } : {}),
-        ...(isWide ? { wides: { increment: 1 } } : {}),
-        ...(isNoBall ? { noBalls: { increment: 1 } } : {}),
-      },
-    });
-
-    // Calculate new striker
-    let newStrikerId = currentInnings.strikerId!;
-    let newNonStrikerId = currentInnings.nonStrikerId!;
-    if (isLegalDelivery) {
-      if (ball.runs % 2 === 1) { [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId]; }
-      if (isOverComplete && ball.runs % 2 === 0) { [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId]; }
-    }
-    if (batsmanDismissed) { newStrikerId = newNonStrikerId; newNonStrikerId = ''; }
-
-    const newCurrentBalls = isOverComplete ? 0 : (isLegalDelivery ? currentLegalBalls + 1 : currentLegalBalls);
-    const newCompletedOvers = currentInnings.completedOvers + (isOverComplete ? 1 : 0);
-
-    await db.innings.update({
-      where: { id: inningsId },
-      data: {
-        runs: { increment: totalRuns },
-        wickets: { increment: ball.isWicket ? 1 : 0 },
-        completedOvers: newCompletedOvers,
-        currentBalls: newCurrentBalls,
-        wideBalls: { increment: isWide ? 1 : 0 },
-        noBalls: { increment: isNoBall ? 1 : 0 },
-        byes: { increment: isBye ? ball.extraRuns : 0 },
-        legByes: { increment: isLegBye ? ball.extraRuns : 0 },
-        strikerId: newStrikerId || null,
-        nonStrikerId: newNonStrikerId || null,
+        runs: s.runs,
+        balls: s.balls,
+        fours: s.fours,
+        sixes: s.sixes,
+        isOut: s.isOut,
+        dismissalType: s.dismissalType,
+        dismissedByBowlerId: s.dismissedByBowlerId,
+        fielderPlayerId: s.fielderPlayerId,
       },
     });
   }
 
-  // Rebuild partnerships from the ball log
+  // --- Write bowling rows ----------------------------------------------------
+  for (const [playerId, s] of Object.entries(state.bowling)) {
+    await db.bowlerInnings.upsert({
+      where: { inningsId_playerId: { inningsId, playerId } },
+      create: {
+        inningsId,
+        playerId,
+        completedOvers: s.completedOvers,
+        balls: s.balls,
+        maidens: s.maidens,
+        runs: s.runs,
+        wickets: s.wickets,
+        wides: s.wides,
+        noBalls: s.noBalls,
+      },
+      update: {
+        completedOvers: s.completedOvers,
+        balls: s.balls,
+        maidens: s.maidens,
+        runs: s.runs,
+        wickets: s.wickets,
+        wides: s.wides,
+        noBalls: s.noBalls,
+      },
+    });
+  }
+
+  // Rows present in the DB but absent from the folded state (should not
+  // happen, but mirrors v1's "reset everything" semantics): zero them out.
+  for (const row of innings.batting) {
+    if (state.batting[row.playerId]) continue;
+    await db.batsmanInnings.update({
+      where: { id: row.id },
+      data: {
+        runs: 0, balls: 0, fours: 0, sixes: 0,
+        isOut: false, dismissalType: null, dismissedByBowlerId: null, fielderPlayerId: null,
+      },
+    });
+  }
+  for (const row of innings.bowling) {
+    if (state.bowling[row.playerId]) continue;
+    await db.bowlerInnings.update({
+      where: { id: row.id },
+      data: { completedOvers: 0, balls: 0, maidens: 0, runs: 0, wickets: 0, wides: 0, noBalls: 0 },
+    });
+  }
+
+  // --- Partnerships remain event-sourced via their own rebuild --------------
   await rebuildPartnerships(inningsId);
 }

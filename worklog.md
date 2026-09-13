@@ -733,3 +733,28 @@ Work Log:
 Stage Summary:
 - v2 prompt covers: free-hit state machine, powerplays, Gully-DLS, retired-hurt return, penalties, mankad/obstructing-field, event-sourced undo + ball editing with clientEventId idempotency, 8-ball overs, per-match house-rules JSON, cricket correctness fixes (bowler analysis, balls faced, maidens, last-ball strike parity), win probability, wagon wheel, pitch map, matchup matrix, MVP index, player career pages, turning points, AI match report, scoring UX v2 (haptics/sound/TTS, landscape pro mode, ball editor, smart suggestions, keyboard shortcuts, toss wizard, voice scoring flag-gated), live spectator v2 (hub, web push, OG/story cards, reactions, catch-me-up, embed widget, SSE Last-Event-ID replay), offline v2 (Background Sync, Web Locks scorer lock, storage hygiene), tournaments v2 (bracket, schedule editor + ICS, tiebreakers, leaderboards, exports), additive Prisma diff with backfill assertions, API v2 with error envelope + rate limits + identity portability (backup codes fixing the one-device lock-in), observability/backup hardening, WCAG 2.1 AA, en/hi/ur i18n with Urdu RTL, first real test suite (Vitest property tests, golden fixtures, Playwright E2E, Lighthouse gates), and a 3-phase rollout plan
 - Deliverable: /home/z/my-project/download/GULLYSCORE_V2_ENHANCEMENT_PROMPT.md (copy-paste-ready companion to the v1 spec)
+
+---
+Task ID: 18
+Agent: Main Agent
+Task: Implement §11 Ground Rules for v2 (GullyScore Championship Edition)
+
+Work Log:
+- §11.2 Created src/lib/engine.ts — PURE cricket engine (zero imports): fold(events, rules) → InningsState, validateNext(state, rules, proposed) → Result<BallEvent, EngineError>, MatchRules/BallEvent/BatsmanStat/BowlerStat/FowEntry/PartnershipState/BallEffects/NextBallContext types, defaultRules(). V1 parity quirks [P1]-[P9] documented in header and pinned by tests; forward-compat: deletedAt tombstone skipping, freeHitOnNoBall rules knob (inert by default), FREE_HIT_NO_DISMISSAL error code reserved
+- §23.2 Created scripts/play-golden-match.ts — plays a scripted full match through the REAL v1 write path (recordBall + striker/bowler route mirroring) with synthetic deviceId 'engine-fixtures': all 7 wicket types, all 4 extra types, innings 1 ends via overs (43/4 in 6.0), innings 2 via target (45/3 in 3.1); scripts/generate-golden-fixtures.ts dumps fixtures to __fixtures__/golden/
+- Created src/lib/engine.test.ts — 49 tests (bun test): 2 golden-fixture parity tests (fold() == stored v1 aggregates exactly), v1 rule units (legality, counters, over completion, strike rotation incl. quirks, wickets, maidens, completion modes), properties (determinism, order-independence, tombstone skipping, over-counting invariant, run conservation with seeded PRNG), validateNext units + §12.1 free-hit forward-compat tests. ALL 49 PASS
+- Fixed 2 fold bugs found by tests: maiden check must accumulate the completing ball's concession first; striker pair must RESYNC from each event's strikerIdBefore/nonStrikerIdBefore (striker route updates the pair between balls)
+- §11.2 Rewrote src/lib/recalculate.ts as a thin DB writer around fold() (was: per-ball DB round-trips); scripts/verify-recalculate.ts proves byte-identical idempotence on the golden match — also fixes 2 latent v1 defects (maidens never recomputed; striker re-derived from wrong starting pair)
+- §11.4 Created src/lib/features.ts (pure: FEATURE_FLAGS, DEFAULT_FEATURES push/reactions/dls/embed ON, voice/aiReport OFF, parseFeaturesEnv with loud typo rejection), src/lib/api-flag.ts (withFeatureFlag route wrapper → 404 when off), src/hooks/useFeatures.ts (SWR client gating); /api/buildinfo now serves "features"
+- §11.1 Created scripts/db-push-guard.mjs — SQLite backup (10 retained) + prisma db push WITHOUT --accept-data-loss (destructive changes mechanically refused); package.json db:push now routes through it
+- §11.6 Created scripts/check-budgets.mjs — measures real first-load JS (gz) per route by crawling the running server; baseline finding: all routes ~245-250KB gz, over the 200KB scoring budget (code-splitting = §23.5 Phase 2); /live hub does not exist yet (404 expected, §15.1)
+- Created docs/release-notes.md — v2 §11.1 ledger: computed-value changes = NONE (guaranteed by fixtures); recalculate defect fixes documented
+- package.json: added test, test:engine, check:budgets, fixtures:golden scripts; .gitignore: db/backups/
+- Verified: eslint clean on all new files (2 pre-existing errors in untouched files); bun test 49/49 pass; bun run build succeeded (107.5MB standalone); server restarted; /api/buildinfo returns features; full API smoke test (teams → match → innings → striker/bowler → FOUR/WIDE/SIX balls → scorecard reads 11/0 at 0.2); browser verification of landing + dashboard with clean console
+
+Stage Summary:
+- §11.2 pure-engine doctrine DELIVERED: src/lib/engine.ts is the single source of truth, provably v1-parity via golden fixtures; recalculate.ts is a thin fold() writer (idempotent, defect-fixed)
+- §11.4 feature flags DELIVERED: flags served from /api/buildinfo, route gating + client hook wired, env-overridable
+- §11.1 additive-only guard DELIVERED: db:push backs up + refuses destructive changes mechanically
+- §11.6 budget tooling DELIVERED with honest baseline: current app exceeds v2 budgets (Phase 2 code-splitting needed)
+- Engine suite (49 tests) is the gate for all future §12 rules — v2 Phase 1 foundation is in place
