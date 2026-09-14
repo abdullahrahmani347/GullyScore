@@ -39,6 +39,8 @@ export const useMatchStore = create<MatchStoreState>()(
       currentBowlerId: null,
       lastBallResult: null,
       isSubmitting: false,
+      xiOrder: null,
+      keeperId: null,
 
       setMatch: (match: MatchData) => set({ match }),
       setCurrentInnings: (innings: InningsState) => set({
@@ -59,6 +61,9 @@ export const useMatchStore = create<MatchStoreState>()(
       setState: (state: ScoringState) => set({ currentState: state }),
       setSubmitting: (v: boolean) => set({ isSubmitting: v }),
       setLastBallResult: (result: RecordBallResponse | null) => set({ lastBallResult: result }),
+      // v2 §14.8 — wizard XI order + keeper tag (smart-default inputs only)
+      setXiOrder: (ids: string[]) => set({ xiOrder: ids }),
+      setKeeperId: (id: string | null) => set({ keeperId: id }),
       reset: () => set({
         currentState: 'SETUP_OPENER_1',
         match: null,
@@ -68,6 +73,8 @@ export const useMatchStore = create<MatchStoreState>()(
         currentBowlerId: null,
         lastBallResult: null,
         isSubmitting: false,
+        xiOrder: null,
+        keeperId: null,
       }),
     }),
     {
@@ -82,6 +89,8 @@ export const useMatchStore = create<MatchStoreState>()(
         nonStrikerId: state.nonStrikerId,
         currentBowlerId: state.currentBowlerId,
         lastBallResult: state.lastBallResult,
+        xiOrder: state.xiOrder,
+        keeperId: state.keeperId,
       }),
       // Rehydrate through the same normalizer — persisted state from an
       // older build may carry shapeless innings rows.

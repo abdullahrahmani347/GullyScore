@@ -17,6 +17,12 @@ interface PlayerSelectModalProps {
   disabledPlayerIds?: string[];
   mode: 'batsman' | 'bowler';
   bowlingStats?: BowlerInningsData[];
+  /**
+   * v2 §14.4 — smart default: the engine's suggested player is pinned to the
+   * top of the list with a "next in" chip so the common case is one tap.
+   * (New-batter sheet: next lineup slot; bowler sheet: engine ranking #1.)
+   */
+  suggestedPlayerId?: string | null;
 }
 
 export function PlayerSelectModal({
@@ -28,18 +34,30 @@ export function PlayerSelectModal({
   disabledPlayerIds = [],
   mode,
   bowlingStats = [],
+  suggestedPlayerId = null,
 }: PlayerSelectModalProps) {
   const [search, setSearch] = useState('');
 
   const filteredPlayers = useMemo(() => {
-    if (!search.trim()) return players;
-    const q = search.toLowerCase();
-    return players.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.jerseyNumber && String(p.jerseyNumber).includes(q))
-    );
-  }, [players, search]);
+    const base = !search.trim()
+      ? players
+      : players.filter(
+          (p) =>
+            p.name.toLowerCase().includes(search) ||
+            (p.jerseyNumber && String(p.jerseyNumber).includes(search))
+        );
+    // §14.4 — the suggested player floats to the top (still one tap to accept)
+    if (suggestedPlayerId) {
+      const idx = base.findIndex((p) => p.id === suggestedPlayerId);
+      if (idx > 0) {
+        const copy = [...base];
+        const [sug] = copy.splice(idx, 1);
+        copy.unshift(sug);
+        return copy;
+      }
+    }
+    return base;
+  }, [players, search, suggestedPlayerId]);
 
   const getBowlerStats = (playerId: string): BowlerInningsData | undefined => {
     return bowlingStats.find((b) => b.playerId === playerId);
@@ -102,6 +120,11 @@ export function PlayerSelectModal({
                   <span className={`text-sm font-medium ${isDisabled ? 'text-t3' : 'text-t1'}`}>
                     {player.name}
                   </span>
+                  {player.id === suggestedPlayerId && (
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/30 uppercase tracking-wide">
+                      next in
+                    </span>
+                  )}
                 </div>
 
                 {mode === 'bowler' && stats && (

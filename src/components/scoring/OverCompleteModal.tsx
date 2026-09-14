@@ -3,10 +3,11 @@
 import { useState, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Search, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatBowlingFigures } from '@/lib/scoring-utils';
 import { useMatchStore } from '@/store/matchStore';
+import { rankBowlerSuggestions } from '@/lib/scoring-ux';
 import type { MatchData, InningsState, Player, BowlerInningsData } from '@/types';
 
 interface OverCompleteModalProps {
@@ -16,9 +17,20 @@ interface OverCompleteModalProps {
   onSelectBowler: (bowlerId: string) => void;
 }
 
+const REASON_LABEL: Record<string, string> = {
+  rested: 'freshest arm',
+  'fewest-overs': 'fewest overs',
+  'only-option': 'only option',
+};
+
+/**
+ * v2 §14.4 — the new-bowler sheet is smart-sorted:
+ *   engine filter (can't bowl consecutive overs) → least recently bowled →
+ *   fewest overs. The #1 is pre-selected and EVERY row accepts in one tap
+ * (no separate confirm step — speed first).
+ */
 export function OverCompleteModal({ open, match, currentInnings, onSelectBowler }: OverCompleteModalProps) {
   const [search, setSearch] = useState('');
-  const [selectedBowlerId, setSelectedBowlerId] = useState<string | null>(null);
   const isSubmitting = useMatchStore((s) => s.isSubmitting);
 
   // Get the fielding team (opposite of batting team)
@@ -34,24 +46,31 @@ export function OverCompleteModal({ open, match, currentInnings, onSelectBowler 
   const overRuns = overBalls.reduce((acc, b) => acc + b.runs + b.extraRuns, 0);
   const overWickets = overBalls.filter((b) => b.isWicket).length;
 
-  const availableBowlers = useMemo(() => {
-    const bowlers = fieldingTeam.players.filter((p) => p.id !== lastBowlerId);
-    if (!search.trim()) return bowlers;
+  // §14.4 — engine ranking: consecutive-over filter → recency → workload
+  const ranking = useMemo(
+    () => rankBowlerSuggestions(fieldingTeam.players, currentInnings),
+    [fieldingTeam.players, currentInnings]
+  );
+  const rankOf = (playerId: string) => ranking.findIndex((r) => r.playerId === playerId);
+
+  const visibleBowlers = useMemo(() => {
+    const sorted = [...fieldingTeam.players].sort((a, b) => rankOf(a.id) - rankOf(b.id));
+    if (!search.trim()) return sorted;
     const q = search.toLowerCase();
-    return bowlers.filter(
+    return sorted.filter(
       (p) => p.name.toLowerCase().includes(q) || (p.jerseyNumber && String(p.jerseyNumber).includes(q))
     );
-  }, [fieldingTeam.players, lastBowlerId, search]);
+  }, [fieldingTeam.players, ranking, search]);
 
   const getBowlerStats = (playerId: string): BowlerInningsData | undefined => {
     return currentInnings.bowling.find((b) => b.playerId === playerId);
   };
 
-  const handleConfirm = () => {
-    if (!selectedBowlerId) return;
-    onSelectBowler(selectedBowlerId);
+  // One tap = confirmed (the suggested row first, engine-ranked order)
+  const handlePick = (playerId: string) => {
+    if (isSubmitting) return;
+    onSelectBowler(playerId);
     setSearch('');
-    setSelectedBowlerId(null);
   };
 
   return (
@@ -60,7 +79,8 @@ export function OverCompleteModal({ open, match, currentInnings, onSelectBowler 
         <DialogHeader>
           <DialogTitle className="text-t1 text-base">Over Complete</DialogTitle>
           <DialogDescription className="text-t3 text-xs">
-            {overRuns} runs{overWickets > 0 ? `, ${overWickets} wicket${overWickets > 1 ? 's' : ''}` : ''} in over {justCompletedOverNumber + 1}. Select next bowler.
+            {overRuns} runs{overWickets > 0 ? `, ${overWickets} wicket${overWickets > 1 ? 's' : ''}` : ''} in over{' '}
+            {justCompletedOverNumber + 1}. Tap a bowler — one tap starts the over.
           </DialogDescription>
         </DialogHeader>
 
@@ -75,25 +95,27 @@ export function OverCompleteModal({ open, match, currentInnings, onSelectBowler 
           />
         </div>
 
-        {/* Bowler list */}
+        {/* Bowler list — engine-ranked, tap = confirmed */}
         <div className="flex-1 overflow-y-auto max-h-[40vh] -mx-1 px-1 space-y-1">
-          {availableBowlers.length === 0 && (
+          {visibleBowlers.length === 0 && (
             <div className="py-8 text-center text-t3 text-sm">No available bowlers</div>
           )}
-          {availableBowlers.map((player) => {
+          {visibleBowlers.map((player, idx) => {
             const stats = getBowlerStats(player.id);
-            const isSelected = selectedBowlerId === player.id;
+            const suggestion = rankOf(player.id) === 0 ? ranking[0] : null;
+            const isSuggested = idx === 0 && suggestion != null;
 
             return (
               <motion.button
                 key={player.id}
                 whileTap={{ scale: 0.97 }}
-                onClick={() => setSelectedBowlerId(player.id)}
+                onClick={() => handlePick(player.id)}
+                disabled={isSubmitting}
                 className={`w-full flex items-center justify-between px-3 py-3 rounded-xl transition-colors text-left ${
-                  isSelected
-                    ? 'bg-accent/15 border border-accent/30'
-                    : 'hover:bg-bg-elevated active:bg-bg-elevated/80'
-                }`}
+                  isSuggested
+                    ? 'bg-accent/15 border border-accent/40'
+                    : 'hover:bg-bg-elevated active:bg-bg-elevated/80 border border-transparent'
+                } ${isSubmitting ? 'opacity-60 pointer-events-none' : ''}`}
               >
                 <div className="flex items-center gap-3">
                   {player.jerseyNumber && (
@@ -101,9 +123,15 @@ export function OverCompleteModal({ open, match, currentInnings, onSelectBowler 
                       {player.jerseyNumber}
                     </span>
                   )}
-                  <span className={`text-sm font-medium ${isSelected ? 'text-accent' : 'text-t1'}`}>
+                  <span className="text-sm font-medium text-t1">
                     {player.name}
                   </span>
+                  {isSuggested && (
+                    <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/30 uppercase">
+                      <Sparkles size={9} />
+                      {REASON_LABEL[suggestion.reason] ?? 'suggested'}
+                    </span>
+                  )}
                 </div>
 
                 {stats && (
@@ -135,18 +163,9 @@ export function OverCompleteModal({ open, match, currentInnings, onSelectBowler 
           })()}
         </div>
 
-        {/* Confirm button */}
-        <button
-          onClick={handleConfirm}
-          disabled={!selectedBowlerId || isSubmitting}
-          className={`w-full h-12 rounded-xl font-semibold text-sm transition-colors ${
-            selectedBowlerId
-              ? 'bg-accent text-bg-app hover:bg-accent/90'
-              : 'bg-bg-elevated text-t3 cursor-not-allowed'
-          }`}
-        >
-          {isSubmitting ? 'Setting bowler...' : 'Confirm Bowler'}
-        </button>
+        {isSubmitting && (
+          <p className="text-center text-xs text-t3 pb-1">Setting bowler…</p>
+        )}
       </DialogContent>
     </Dialog>
   );

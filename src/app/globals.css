@@ -24,6 +24,11 @@
   --color-border-act: rgba(0,212,170,0.35);
   --color-shadow-card: 0 4px 24px rgba(0,0,0,0.6);
   --color-shadow-glow: 0 0 24px rgba(0,212,170,0.25);
+  /* ── v2 §14.0 Scoring UX tokens ── */
+  --color-free-hit: #FFB300;
+  --color-pp-gold: #FFD700;
+  --color-danger: #FF4D6A;
+  --color-warn: #FFC24B;
   --font-sans: var(--font-inter);
   --font-mono: var(--font-mono);
 }
@@ -67,7 +72,17 @@ body { background: var(--color-bg-app); min-height: 100dvh; }
   --color-dot: #B0B0C0;
   --color-shadow-card: 0 4px 24px rgba(0,0,0,0.06);
   --color-shadow-glow: 0 0 24px rgba(0,184,140,0.12);
+  /* ── v2 §14.0 — light-theme values for every Scoring UX token ── */
+  --color-free-hit: #B45309;
+  --color-pp-gold: #A16207;
+  --color-danger: #E5365B;
+  --color-warn: #B7791F;
 }
+
+/* ── v2 §14.0 — team tint (batting team colour, contrast-guarded).
+   Computed at runtime by lib/scoring-ux.ts teamTint() and set inline as
+   --team-tint on the scoring root. Defaults to transparent. ── */
+:root { --team-tint: transparent; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -101,6 +116,34 @@ body { background: var(--color-bg-app); min-height: 100dvh; }
 .wicket-flash { animation: wicket-flash 0.8s ease-out; }
 .four-flash { animation: four-flash 0.6s ease-out; }
 .six-flash { animation: six-flash 0.6s ease-out; }
+
+/* ── v2 §14.8 — Setup wizard: 3D coin flip (CSS-only, reduced-motion-safe) ── */
+@keyframes coin-flip {
+  0%   { transform: rotateX(0deg) translateY(0); }
+  50%  { transform: rotateX(1440deg) translateY(-120px); }
+  100% { transform: rotateX(2880deg) translateY(0); }
+}
+.coin-3d { transform-style: preserve-3d; will-change: transform; }
+.coin-3d.flipping { animation: coin-flip 1.4s cubic-bezier(0.3, 0.7, 0.4, 1) forwards; }
+.coin-face { backface-visibility: hidden; }
+.coin-face.back { transform: rotateY(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* No gymnastics — the coin swaps faces with a short fade instead. */
+  .coin-3d.flipping { animation: none; }
+  .coin-3d.flipping .coin-face.front { opacity: 0; transition: opacity 0.5s ease 0.5s; }
+  .coin-3d.flipping .coin-face.back { opacity: 1; transition: opacity 0.5s ease 0.5s; }
+}
+
+/* ── v2 §14.2 — Landscape Pro Mode: two-thumb targets, no page scroll ── */
+.pro-mode-grid { user-select: none; touch-action: manipulation; }
+.pro-target {
+  min-width: 64px;
+  min-height: 64px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pro-target:active { transform: scale(0.94); }
 
 /* Scoring screen - prevent overscroll */
 .scoring-screen {

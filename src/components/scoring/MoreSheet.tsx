@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Settings2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,8 @@ interface MoreSheetProps {
   onPenalty: (penaltySide: 'batting' | 'bowling', runs: number, reason: string) => void;
   /** Strike-pair correction — patches the innings row (also recovers a degenerate pair). */
   onFixPair: (strikerId: string, nonStrikerId: string) => Promise<unknown> | void;
+  /** v2 §14.1 — opens the scoring feel & layout sheet (haptics/sound/layout). */
+  onOpenSettings?: () => void;
   /** refresh SWR after server-side changes (overs/target) */
   mutate: () => Promise<unknown>;
 }
@@ -26,7 +29,7 @@ interface MoreSheetProps {
  * v2 §12.3 + §12.5 — the "…" overflow sheet: PENALTY runs and the
  * organizer match settings (reduce overs / manual target with PIN).
  */
-export function MoreSheet({ open, match, currentInnings, onOpenChange, onPenalty, onFixPair, mutate }: MoreSheetProps) {
+export function MoreSheet({ open, match, currentInnings, onOpenChange, onPenalty, onFixPair, onOpenSettings, mutate }: MoreSheetProps) {
   const [mode, setMode] = useState<'menu' | 'penalty' | 'reduce' | 'target' | 'pin' | 'batters'>('menu');
   const [penaltySide, setPenaltySide] = useState<'batting' | 'bowling'>('batting');
   const [penaltyRuns, setPenaltyRuns] = useState(5);
@@ -223,6 +226,21 @@ export function MoreSheet({ open, match, currentInnings, onOpenChange, onPenalty
                   <span className="text-[10px] text-t2 mt-1">Fix batters</span>
                 </motion.button>
               </div>
+
+              {/* v2 §14.1 — scoring feel & layout (haptics, sound, speech, pro mode) */}
+              {onOpenSettings && (
+                <button
+                  onClick={() => {
+                    onOpenSettings();
+                    close(false);
+                  }}
+                  className="w-full flex items-center gap-2.5 p-3 rounded-xl bg-bg-elevated hover:bg-bg-elevated/80 border border-border text-left"
+                >
+                  <Settings2 size={16} className="text-t2 shrink-0" />
+                  <span className="text-xs font-medium text-t1">Scoring feel &amp; layout</span>
+                  <span className="text-[10px] text-t3 ml-auto">haptics · sound · layout</span>
+                </button>
+              )}
             </div>
           )}
 

@@ -128,6 +128,8 @@ export interface BallRecord {
   wagonDirection?: string | null;
   pitchLength?: string | null;
   pitchLine?: string | null;
+  // v2 §14.7 — per-ball timestamp (ISO string from the server) for over-rate
+  timestamp?: string | null;
 }
 
 export interface MatchData {
@@ -275,6 +277,11 @@ export interface MatchStoreState {
   currentBowlerId: string | null;
   lastBallResult: RecordBallResponse | null;
   isSubmitting: boolean;
+  // v2 §14.8 — setup wizard XI order (player ids, batting order) and the
+  // optional keeper tag. Client-side only; the engine reads batting order
+  // from the order batters enter, so this just powers smart defaults.
+  xiOrder: string[] | null;
+  keeperId: string | null;
 
   setMatch: (match: MatchData) => void;
   setCurrentInnings: (innings: InningsState) => void;
@@ -285,5 +292,7 @@ export interface MatchStoreState {
   setState: (state: ScoringState) => void;
   setSubmitting: (v: boolean) => void;
   setLastBallResult: (result: RecordBallResponse | null) => void;
+  setXiOrder: (ids: string[]) => void;
+  setKeeperId: (id: string | null) => void;
   reset: () => void;
 }

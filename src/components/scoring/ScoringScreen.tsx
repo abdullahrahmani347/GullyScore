@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, type CSSProperties } from 'react';
 import { useMatchStore } from '@/store/matchStore';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useFeatures } from '@/hooks/useFeatures';
 import { useScoringHandlers } from '@/hooks/useScoringHandlers';
 import { ScoreDisplay } from './ScoreDisplay';
 import { ScoreButtons } from './ScoreButtons';
@@ -19,10 +21,20 @@ import { InningsBreakScreen } from './InningsBreakScreen';
 import { MatchResultScreen } from './MatchResultScreen';
 import { MoreSheet } from './MoreSheet';
 import { BallEditorSheet } from './BallEditorSheet';
+// ── v2 §14 Scoring UX components ──
+import { ProModeLayout, useProMode } from './ProModeLayout';
+import { KeyboardScoring } from './KeyboardScoring';
+import { VoiceScoring } from './VoiceScoring';
+import { ContextFooter } from './ContextFooter';
+import { OfflineQueueInspector } from './OfflineQueueInspector';
+import { SettingsSheet } from './SettingsSheet';
+import { SetupWizard } from './SetupWizard';
 import { WagonPromptSheet, PitchMapPromptSheet, wagonPromptDisabled } from '@/components/analytics';
+import { Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { computeMilestoneAlerts, generateCommentary, getBatsmanMilestone } from '@/lib/intelligence';
-import { freeHitPending, parseHouseRules } from '@/lib/scoring-context';
+import { computeMilestoneAlerts, generateCommentary } from '@/lib/intelligence';
+import { parseHouseRules } from '@/lib/scoring-context';
+import { teamTint, nextBatterSuggestion } from '@/lib/scoring-ux';
 import type { ExtraType, CommentaryEvent, BallRecord, WicketType } from '@/types';
 
 interface ScoringScreenProps {
@@ -37,6 +49,7 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
     handleWicket,
     handlePenalty,
     handleUndo,
+    handleUndoToOverStart,
     handleRedo,
     redoAvailable,
     handleSetStriker,
@@ -46,12 +59,23 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
     handleCreateInnings,
   } = useScoringHandlers({ matchId, mutate });
 
+  // ── v2 §14 wiring ──
+  // §14.2 — landscape two-thumb layout (+ persisted override in settings)
+  const { proModeActive } = useProMode();
+  // §14.11 — voice flag (default OFF; false until the flag is confirmed ON)
+  const { isEnabled } = useFeatures();
+  const voiceEnabled = isEnabled('voice');
+  // §14.0 — team tint for the scoring root (contrast-guarded per theme)
+  const themeMode = useSettingsStore((s) => s.theme);
+
   const [extrasPanelOpen, setExtrasPanelOpen] = useState(false);
   const [wicketModalOpen, setWicketModalOpen] = useState(false);
   // v2 §12.6 — wicket ON an extra (run-out off a wide / no-ball)
   const [wicketExtraContext, setWicketExtraContext] = useState<{ extraType: ExtraType; extraRuns: number } | null>(null);
   // v2 §12.3/§12.5 — more actions (penalty, reduce overs, target)
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
+  // v2 §14.1 — the feel & layout settings sheet
+  const [settingsSheetOpen, setSettingsSheetOpen] = useState(false);
   // v2 §12.7 — ball editor (long-press an OverStrip chip)
   const [editBall, setEditBall] = useState<BallRecord | null>(null);
   // v2 §13.2/§13.3 — post-ball capture prompts (wagon wheel, pitch map)
@@ -143,16 +167,25 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
     setExtrasPanelOpen(true);
   }, []);
 
-  const onExtrasConfirm = useCallback((extraType: ExtraType, extraRuns: number) => {
-    trackBatsmanRunsBefore();
-    if (extraType === 'NO_BALL') {
-      handleScore(extraRuns, extraType, 1);
-    } else if (extraType === 'WIDE') {
-      handleScore(0, extraType, extraRuns);
-    } else {
-      handleScore(0, extraType, extraRuns);
-    }
-  }, [handleScore, trackBatsmanRunsBefore]);
+  // v2 §14.5/§14.11 — one shared extras commit path for buttons, keyboard and
+  // voice. NO_BALL: extraRuns = runs off the bat, penalty baked in as +1;
+  // WIDE/BYE/LEG_BYE: extraRuns = total runs from the extra.
+  const commitExtra = useCallback(
+    (extraType: ExtraType, extraRuns: number) => {
+      trackBatsmanRunsBefore();
+      if (extraType === 'NO_BALL') {
+        handleScore(extraRuns, extraType, 1);
+      } else {
+        handleScore(0, extraType, extraRuns);
+      }
+    },
+    [handleScore, trackBatsmanRunsBefore]
+  );
+
+  const onExtrasConfirm = useCallback(
+    (extraType: ExtraType, extraRuns: number) => commitExtra(extraType, extraRuns),
+    [commitExtra]
+  );
 
   // §12.6 — run-out on an extra delivery: open the wicket modal with context
   const onExtrasRunOut = useCallback((extraType: ExtraType, extraRuns: number) => {
@@ -183,6 +216,21 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   const onUndo = useCallback(() => {
     handleUndo();
   }, [handleUndo]);
+
+  // v2 §14.11 — voice wicket: the striker is the default dismissed batter
+  // (caught/bowled/lbw/stumped all dismiss the striker); the ball editor can
+  // correct any mis-commit afterwards. Run-outs by voice are discouraged —
+  // the confirm toast lets the scorer cancel.
+  const onVoiceWicket = useCallback(
+    (wicketType: WicketType) => {
+      const s = useMatchStore.getState();
+      if (!s.strikerId) return;
+      trackBatsmanRunsBefore();
+      setWicketExtraContext(null);
+      handleWicket({ wicketType, dismissedPlayerId: s.strikerId });
+    },
+    [handleWicket, trackBatsmanRunsBefore]
+  );
 
   // v2 §12.4 — retired batter returns (dead ball): set the pair either end
   const onReturnBatter = useCallback((playerId: string, asStriker: boolean) => {
@@ -245,29 +293,11 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
     } else if (wantsPitch) {
       setPitchBall(ball);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastBallResultId]);
 
   // Player selection handlers
-  const onOpenerSelect = useCallback((playerId: string) => {
-    if (currentState === 'SETUP_OPENER_1') {
-      store.setStrike(playerId, store.nonStrikerId ?? '');
-      store.setState('SETUP_OPENER_2');
-    } else if (currentState === 'SETUP_OPENER_2') {
-      store.setStrike(store.strikerId ?? '', playerId);
-      handleSetStriker(store.strikerId ?? '', playerId).then(() => {
-        store.setState('SETUP_OPENING_BOWLER');
-      });
-    }
-  }, [currentState, store, handleSetStriker]);
-
-  const onOpeningBowlerSelect = useCallback((bowlerId: string) => {
-    store.setBowler(bowlerId);
-    handleSetBowler(bowlerId).then(() => {
-      store.setState('SCORING');
-      toast.success('Match started! Let the scoring begin.');
-    });
-  }, [store, handleSetBowler]);
+  // (v2 §14.8: the old SETUP_OPENER_1/2 + SETUP_OPENING_BOWLER modal chain was
+  // replaced by the SetupWizard — see the isInitialSetup branch above.)
 
   const onNewBatsmanSelect = useCallback((playerId: string) => {
     // [P7]/[P8]: the SURVIVOR keeps strike; the new batter takes the vacated
@@ -311,6 +341,47 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
       store.setState('SCORING');
     });
   }, [store, handleSetBowler]);
+
+  // ── v2 §14.4 — smart default for the new-batter sheet: next XI slot ──
+  // (wizard XI order wins; falls back to squad order when no wizard ran)
+  const nextBatterIn = useMemo(() => {
+    if (!currentInnings) return null;
+    return nextBatterSuggestion(currentInnings, store.strikerId, store.nonStrikerId, store.xiOrder);
+  }, [currentInnings, store.strikerId, store.nonStrikerId, store.xiOrder]);
+
+  // ── v2 §14.0 — team tint (batting team colour at 20%, contrast-guarded
+  // per theme). Set as --team-tint on the scoring root; components read the
+  // CSS var so both themes get the same one-line theming.
+  const tint = useMemo(() => {
+    const color = currentInnings?.team?.color;
+    if (!color) return 'transparent';
+    return teamTint(color, themeMode === 'light' ? 'light' : 'dark');
+  }, [currentInnings?.team?.color, themeMode]);
+
+  // ── v2 §14.8 — Setup wizard replaces the old 3-modal opener chain ──
+  // Any pre-LIVE setup state routes here: fresh matches (the wizard runs the
+  // full toss → XI → bowler flow and creates the innings itself) as well as
+  // interrupted setups (an innings row already exists — the wizard resumes at
+  // the earliest unfinished step and never duplicates the row).
+  const isInitialSetup =
+    currentState === 'SETUP_OPENER_1' || currentState === 'SETUP_OPENER_2' || currentState === 'SETUP_OPENING_BOWLER';
+  if (match && isInitialSetup) {
+    const existingInnings =
+      currentInnings && currentInnings.matchId === matchId ? currentInnings : null;
+    return (
+      <SetupWizard
+        match={match}
+        mutate={mutate}
+        initialInnings={existingInnings}
+        onCreateInnings={async (teamId, inningsNumber) => {
+          if (existingInnings) return existingInnings;
+          return handleCreateInnings(teamId, inningsNumber);
+        }}
+        onSetStriker={handleSetStriker}
+        onSetBowler={handleSetBowler}
+      />
+    );
+  }
 
   // Render based on state
   if (!match || !currentInnings) {
@@ -369,44 +440,6 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   // Player selection modals
   const renderPlayerModals = () => (
     <>
-      {/* Opener 1 selection */}
-      {(currentState === 'SETUP_OPENER_1') && (
-        <PlayerSelectModal
-          open={true}
-          players={currentInnings.team.players}
-          title="Select Striker"
-          description="Choose the opening batsman on strike"
-          onSelect={onOpenerSelect}
-          mode="batsman"
-        />
-      )}
-
-      {/* Opener 2 selection */}
-      {currentState === 'SETUP_OPENER_2' && (
-        <PlayerSelectModal
-          open={true}
-          players={currentInnings.team.players.filter((p) => p.id !== store.strikerId)}
-          title="Select Non-Striker"
-          description="Choose the opening batsman at the other end"
-          onSelect={onOpenerSelect}
-          disabledPlayerIds={store.strikerId ? [store.strikerId] : []}
-          mode="batsman"
-        />
-      )}
-
-      {/* Opening bowler selection */}
-      {currentState === 'SETUP_OPENING_BOWLER' && (
-        <PlayerSelectModal
-          open={true}
-          players={getAvailableBowlers()}
-          title="Select Opening Bowler"
-          description="Choose the bowler to open the attack"
-          onSelect={onOpeningBowlerSelect}
-          mode="bowler"
-          bowlingStats={currentInnings.bowling}
-        />
-      )}
-
       {/* New batsman after wicket */}
       {currentState === 'NEW_BATSMAN' && (
         <PlayerSelectModal
@@ -416,6 +449,7 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
           description="Select the next batsman to come in"
           onSelect={onNewBatsmanSelect}
           mode="batsman"
+          suggestedPlayerId={nextBatterIn}
         />
       )}
 
@@ -452,13 +486,14 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
         onRunOut={onExtrasRunOut}
       />
 
-      {/* More actions (v2 §12.3/§12.5: penalty, reduce overs, target) */}
+      {/* More actions (v2 §12.3/§12.5: penalty, reduce overs, target + §14.1 settings) */}
       <MoreSheet
         open={moreSheetOpen}
         match={match}
         currentInnings={currentInnings}
         onOpenChange={setMoreSheetOpen}
         onPenalty={handlePenalty}
+        onOpenSettings={() => setSettingsSheetOpen(true)}
         onFixPair={async (strikerId, nonStrikerId) => {
           // Patches the innings row (authoritative pair) + the store —
           // recovers a stuck (degenerate) pair and scorer mistakes.
@@ -514,66 +549,179 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   // Main scoring UI
   const isScoring = ['SCORING', 'PROCESSING'].includes(currentState);
 
+  // v2 §14.5 — keys only land while scoring with no overlay open (player
+  // modals already gate themselves via currentState).
+  const anyOverlayOpen =
+    extrasPanelOpen ||
+    wicketModalOpen ||
+    moreSheetOpen ||
+    settingsSheetOpen ||
+    editBall != null ||
+    wagonBall != null ||
+    pitchBall != null;
+  const keyboardActive = currentState === 'SCORING' && !anyOverlayOpen;
+
+  // v2 §14.5 — Esc closes the topmost overlay (KeyboardScoring keeps refs,
+  // so a fresh inline function each render is fine)
+  const onKeyboardEscape = () => {
+    if (wicketModalOpen) {
+      setWicketModalOpen(false);
+      setWicketExtraContext(null);
+    } else if (extrasPanelOpen) setExtrasPanelOpen(false);
+    else if (moreSheetOpen) setMoreSheetOpen(false);
+    else if (settingsSheetOpen) setSettingsSheetOpen(false);
+    else if (editBall) setEditBall(null);
+    else if (wagonBall) setWagonBall(null);
+    else if (pitchBall) setPitchBall(null);
+  };
+
   return (
-    <div className="min-h-dvh bg-bg-app flex flex-col">
-      {/* Score display */}
-      <div className="px-3 pt-3">
-        <ScoreDisplay match={match} currentInnings={currentInnings} />
-      </div>
+    <div
+      className="min-h-dvh bg-bg-app flex flex-col relative"
+      style={{ '--team-tint': tint } as CSSProperties}
+    >
+      {proModeActive ? (
+        <>
+          {/* v2 §14.2 — landscape two-thumb layout */}
+          <ProModeLayout
+            match={match}
+            currentInnings={currentInnings}
+            onScore={onScore}
+            onExtra={commitExtra}
+            onWicket={onWicket}
+            onUndo={onUndo}
+            onUndoToOverStart={handleUndoToOverStart}
+            onRedo={handleRedo}
+            redoAvailable={redoAvailable}
+            onMore={() => setMoreSheetOpen(true)}
+          />
+          {/* v2 §14.7 — the context strip stays pinned under both layouts */}
+          <div className="px-2 pb-2">
+            <ContextFooter match={match} currentInnings={currentInnings} />
+          </div>
+          {/* v2 §14.11 — floating voice toggle in pro mode */}
+          {voiceEnabled && (
+            <div className="absolute top-2 right-2 z-20">
+              <VoiceScoring
+                enabled={voiceEnabled}
+                onRuns={onScore}
+                onExtra={commitExtra}
+                onWicket={onVoiceWicket}
+                onUndo={onUndo}
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* v2 §14.9 — offline queue pill · v2 §14.1 — feel & layout entry */}
+          <div className="flex items-center justify-between px-3 pt-2 gap-2">
+            <OfflineQueueInspector matchId={matchId} />
+            <button
+              onClick={() => setSettingsSheetOpen(true)}
+              title="Scoring feel & layout"
+              aria-label="Scoring feel & layout settings"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[10px] font-mono font-semibold border bg-bg-elevated text-t3 border-border hover:text-t1 transition-colors"
+            >
+              <Settings2 size={11} />
+              feel
+            </button>
+          </div>
 
-      {/* Milestone alerts */}
-      {milestoneAlerts.length > 0 && (
-        <div className="px-3 mt-2">
-          <MilestoneAlertStrip alerts={milestoneAlerts} />
-        </div>
+          {/* Score display */}
+          <div className="px-3 pt-1">
+            <ScoreDisplay match={match} currentInnings={currentInnings} />
+          </div>
+
+          {/* Milestone alerts */}
+          {milestoneAlerts.length > 0 && (
+            <div className="px-3 mt-2">
+              <MilestoneAlertStrip alerts={milestoneAlerts} />
+            </div>
+          )}
+
+          {/* Commentary ticker (v2 §14.3: long-press the row to edit the ball) */}
+          <div className="px-3 mt-2">
+            <CommentaryTicker
+              commentary={commentary}
+              onConsumed={() => setCommentary(null)}
+              onEditBall={setEditBall}
+              ball={lastBallResult?.ball ?? null}
+            />
+          </div>
+
+          {/* Over strip (v2: FH rings, PP tint, split divider, long-press edit) */}
+          <div className="px-3 mt-2">
+            <OverStrip
+              currentInnings={currentInnings}
+              match={match}
+              onEditBall={setEditBall}
+            />
+          </div>
+
+          {/* Batsmen + Bowler cards side by side on larger screens, stacked on mobile */}
+          <div className="px-3 mt-2 grid grid-cols-2 gap-2">
+            <BatsmenCard match={match} currentInnings={currentInnings} onReturnBatter={onReturnBatter} />
+            <BowlerCard currentInnings={currentInnings} />
+          </div>
+
+          {/* Current partnership */}
+          <div className="px-3 mt-2">
+            <CurrentPartnership currentInnings={currentInnings} />
+          </div>
+
+          {/* v2 §14.11 — voice scoring toggle (flag-gated, default OFF) */}
+          {voiceEnabled && (
+            <div className="px-3 mt-2 flex justify-end">
+              <VoiceScoring
+                enabled={voiceEnabled}
+                onRuns={onScore}
+                onExtra={commitExtra}
+                onWicket={onVoiceWicket}
+                onUndo={onUndo}
+              />
+            </div>
+          )}
+
+          {/* Spacer to push buttons to bottom */}
+          <div className="flex-1" />
+
+          {/* v2 §14.7 — persistent context strip with over-rate */}
+          <div className="px-3 pb-1">
+            <ContextFooter match={match} currentInnings={currentInnings} />
+          </div>
+
+          {/* Score buttons (v2: penalty/more overflow + redo + undo badge/long-press) */}
+          <div className="px-3 pb-4 pt-1">
+            <ScoreButtons
+              onScore={onScore}
+              onExtras={onExtras}
+              onWicket={onWicket}
+              onUndo={onUndo}
+              onUndoToOverStart={handleUndoToOverStart}
+              onRedo={handleRedo}
+              redoAvailable={redoAvailable}
+              onMore={() => setMoreSheetOpen(true)}
+            />
+          </div>
+        </>
       )}
-
-      {/* Commentary ticker */}
-      <div className="px-3 mt-2">
-        <CommentaryTicker
-          commentary={commentary}
-          onConsumed={() => setCommentary(null)}
-        />
-      </div>
-
-      {/* Over strip (v2: FH rings, PP tint, split divider, long-press edit) */}
-      <div className="px-3 mt-2">
-        <OverStrip
-          currentInnings={currentInnings}
-          match={match}
-          onEditBall={setEditBall}
-        />
-      </div>
-
-      {/* Batsmen + Bowler cards side by side on larger screens, stacked on mobile */}
-      <div className="px-3 mt-2 grid grid-cols-2 gap-2">
-        <BatsmenCard match={match} currentInnings={currentInnings} onReturnBatter={onReturnBatter} />
-        <BowlerCard currentInnings={currentInnings} />
-      </div>
-
-      {/* Current partnership */}
-      <div className="px-3 mt-2">
-        <CurrentPartnership currentInnings={currentInnings} />
-      </div>
-
-      {/* Spacer to push buttons to bottom */}
-      <div className="flex-1" />
-
-      {/* Score buttons (v2: penalty/more overflow + redo) */}
-      <div className="px-3 pb-4 pt-2">
-        <ScoreButtons
-          onScore={onScore}
-          onExtras={onExtras}
-          onWicket={onWicket}
-          onUndo={onUndo}
-          onRedo={handleRedo}
-          redoAvailable={redoAvailable}
-          onMore={() => setMoreSheetOpen(true)}
-        />
-      </div>
 
       {/* Modals and panels */}
       {renderPlayerModals()}
+
+      {/* v2 §14.1 — feel & layout settings sheet */}
+      <SettingsSheet open={settingsSheetOpen} onOpenChange={setSettingsSheetOpen} />
+
+      {/* v2 §14.5 — desktop keyboard scoring (0-6 · W · ⇧W · N · B · L · U · Esc · ?) */}
+      <KeyboardScoring
+        active={keyboardActive}
+        onScore={onScore}
+        onWicket={onWicket}
+        onExtra={(extraType) => commitExtra(extraType, extraType === 'NO_BALL' ? 0 : 1)}
+        onUndo={onUndo}
+        onEscape={onKeyboardEscape}
+      />
     </div>
   );
 }

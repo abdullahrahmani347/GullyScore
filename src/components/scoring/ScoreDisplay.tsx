@@ -6,6 +6,7 @@ import { formatOvers, calculateCRR, calculateRRR } from '@/lib/scoring-utils';
 import { computeProjection, computeRRRDanger } from '@/lib/intelligence';
 import { freeHitPending, powerplayContext } from '@/lib/scoring-context';
 import { WPMeter } from '@/components/analytics/WPMeter';
+import { OdometerNumber } from './Celebrations';
 import type { MatchData, InningsState } from '@/types';
 
 interface ScoreDisplayProps {
@@ -98,7 +99,7 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
         </span>
       </div>
 
-      {/* Hero score */}
+      {/* Hero score — §14.6: runs roll on an odometer at every milestone */}
       <div className="flex items-baseline gap-3">
         <motion.div
           key={`${runs}-${wickets}`}
@@ -107,13 +108,13 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           className="font-mono text-5xl font-bold text-t1 leading-none"
         >
-          {runs}/{wickets}
+          <OdometerNumber value={runs} />/{wickets}
         </motion.div>
         <span className="font-mono text-lg text-t3">
           ({formatOvers(completedOvers, currentBalls)} ov)
         </span>
 
-        {/* §12.1 — FREE HIT pill (amber) beside the over counter */}
+        {/* §14.0/§12.1 — FREE HIT pill beside the over counter (token) */}
         <AnimatePresence>
           {freeHit && (
             <motion.span
@@ -121,15 +122,15 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 uppercase tracking-wider"
+              className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-1 rounded-full bg-free-hit/20 text-free-hit border border-free-hit/40 uppercase tracking-wider"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-free-hit animate-pulse" />
               Free Hit
             </motion.span>
           )}
         </AnimatePresence>
 
-        {/* §12.2 — powerplay badge (gold) while the phase is active */}
+        {/* §14.0/§12.2 — powerplay badge (gold) while the phase is active */}
         <AnimatePresence>
           {pp?.active && (
             <motion.span
@@ -137,7 +138,7 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-1 rounded-full bg-gold/15 text-gold border border-gold/35 uppercase tracking-wider"
+              className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-1 rounded-full bg-pp-gold/15 text-pp-gold border border-pp-gold/35 uppercase tracking-wider"
             >
               PP {Math.min(pp.ppOvers, completedOvers + 1)}/{pp.ppOvers}
             </motion.span>

@@ -13,7 +13,8 @@ export async function GET(
     const { id } = await params;
     const team = await db.team.findUnique({
       where: { id },
-      include: { players: true },
+      // v2 §14.8/§17.7 — guests are match-only, hidden from roster views
+      include: { players: { where: { isGuest: false } } },
     });
 
     if (!team) {

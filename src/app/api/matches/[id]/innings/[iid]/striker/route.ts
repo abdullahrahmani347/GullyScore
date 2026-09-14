@@ -42,6 +42,32 @@ export async function POST(
       );
     }
 
+    // v2 §14.8 — team-membership guard: both openers must belong to the
+    // innings' BATTING team. Without this, a buggy client (e.g. the wizard
+    // defaulting the XI to the wrong squad) silently corrupts the innings
+    // with the fielding side's players.
+    const inningsRow = await db.innings.findUnique({
+      where: { id: iid },
+      select: { teamId: true, matchId: true },
+    });
+    if (!inningsRow) {
+      return NextResponse.json({ error: 'Innings not found' }, { status: 404 });
+    }
+    if (inningsRow.matchId !== id) {
+      return NextResponse.json({ error: 'Innings does not belong to this match' }, { status: 400 });
+    }
+    const battingPlayers = await db.player.findMany({
+      where: { teamId: inningsRow.teamId },
+      select: { id: true },
+    });
+    const battingIds = new Set(battingPlayers.map((p) => p.id));
+    if (!battingIds.has(strikerId) || !battingIds.has(nonStrikerId)) {
+      return NextResponse.json(
+        { error: 'Both batters must belong to the batting team' },
+        { status: 400 }
+      );
+    }
+
     const innings = await db.innings.update({
       where: { id: iid },
       data: {

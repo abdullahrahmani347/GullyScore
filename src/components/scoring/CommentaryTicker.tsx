@@ -1,12 +1,17 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { BallRecord } from '@/types';
 import type { CommentaryEvent } from '@/lib/intelligence';
 
 interface CommentaryTickerProps {
   commentary: CommentaryEvent | null;
   onConsumed?: () => void;
+  /** §14.3 — long-press the commentary row to open the ball editor. */
+  onEditBall?: (ball: BallRecord) => void;
+  /** §14.3 — the ball this commentary describes (for the long-press edit). */
+  ball?: BallRecord | null;
 }
 
 const CATEGORY_STYLES: Record<string, { icon: string; accentColor: string }> = {
@@ -28,26 +33,16 @@ const CATEGORY_STYLES: Record<string, { icon: string; accentColor: string }> = {
  * Displays a one-line commentary string below the score display.
  * Shows for 5 seconds with slide-in animation, then fades out.
  */
-export function CommentaryTicker({ commentary, onConsumed }: CommentaryTickerProps) {
-  const [activeCommentary, setActiveCommentary] = useState<CommentaryEvent | null>(null);
-  const [displayKey, setDisplayKey] = useState(0);
+export function CommentaryTicker({ commentary, onConsumed, onEditBall, ball }: CommentaryTickerProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // The parent owns the commentary lifecycle: it sets a fresh event per ball
+  // and clears it via onConsumed. This effect only arms the 5s auto-dismiss
+  // timer (an external system) — no state mirroring, no cascading renders.
   useEffect(() => {
     if (!commentary) return;
-
-    // New commentary arrived — display it
-    setActiveCommentary(commentary);
-    setDisplayKey((k) => k + 1);
-
-    // Clear any existing timer
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
-    // Auto-dismiss after 5 seconds
     timerRef.current = setTimeout(() => {
-      setActiveCommentary(null);
       onConsumed?.();
     }, 5000);
 
@@ -58,23 +53,49 @@ export function CommentaryTicker({ commentary, onConsumed }: CommentaryTickerPro
     };
   }, [commentary, onConsumed]);
 
-  if (!activeCommentary) return null;
+  if (!commentary) return null;
 
-  const style = CATEGORY_STYLES[activeCommentary.category] ?? {
+  const style = CATEGORY_STYLES[commentary.category] ?? {
     icon: '>',
     accentColor: 'text-t2',
+  };
+
+  // §14.3 — long-press the row → edit this ball (server-confirmed balls only)
+  const canEdit =
+    onEditBall != null &&
+    ball != null &&
+    typeof ball.id === 'string' &&
+    !ball.id.startsWith('optimistic-');
+  const pressStart = () => {
+    if (!canEdit || !ball) return;
+    pressTimerRef.current = setTimeout(() => {
+      pressTimerRef.current = null;
+      onEditBall?.(ball);
+    }, 550);
+  };
+  const pressEnd = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
   };
 
   return (
     <div className="overflow-hidden">
       <AnimatePresence mode="wait">
         <motion.div
-          key={displayKey}
+          key={commentary.timestamp}
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -10, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-          className="flex items-center gap-2 bg-bg-card border border-border rounded-lg px-3 py-1.5"
+          onPointerDown={pressStart}
+          onPointerUp={pressEnd}
+          onPointerLeave={pressEnd}
+          className={`flex items-center gap-2 bg-bg-card border border-border rounded-lg px-3 py-1.5 ${
+            canEdit ? 'cursor-pointer select-none' : ''
+          }`}
+          title={canEdit ? 'Long-press to edit this ball' : undefined}
         >
           {/* Category badge */}
           <span
@@ -85,7 +106,7 @@ export function CommentaryTicker({ commentary, onConsumed }: CommentaryTickerPro
 
           {/* Commentary text */}
           <span className="text-[11px] text-t2 italic truncate flex-1">
-            {activeCommentary.text}
+            {commentary.text}
           </span>
         </motion.div>
       </AnimatePresence>

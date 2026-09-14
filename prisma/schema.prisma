@@ -31,6 +31,9 @@ model Player {
   jerseyNumber Int?
   // v2 §13.2 — wagon wheel mirroring ('R' right-hand, 'L' left-hand)
   battingHand  String? @default("R")
+  // v2 §14.8/§17.7 — one-off guest entered in the setup wizard; guests are
+  // match-only players and never appear in team roster views.
+  isGuest      Boolean @default(false)
   createdAt    DateTime @default(now())
 
   team           Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)

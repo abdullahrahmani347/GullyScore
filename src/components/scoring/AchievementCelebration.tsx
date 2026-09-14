@@ -3,6 +3,9 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { BADGES, type EarnedAchievement } from '@/lib/achievements';
 import { ACHIEVEMENT_ICONS } from '@/components/icons/GullyIcons';
+import { ConfettiCanvas } from './Celebrations';
+import { feedback } from '@/lib/feedback';
+import { useEffect } from 'react';
 
 interface AchievementCelebrationProps {
   achievement: EarnedAchievement | null;
@@ -10,17 +13,25 @@ interface AchievementCelebrationProps {
 }
 
 /**
- * Full-screen celebration animation when a player earns a badge for the first time.
- * Shows badge icon, name, and player name with a dramatic entrance.
- * Auto-dismisses after 4 seconds.
+ * Full-screen celebration animation when a player earns a badge for the first
+ * time. v2 §14.6: canvas confetti (≤ 3 s, reduced-motion respected) + the
+ * milestone haptic/sound from the feedback layer.
  */
 export function AchievementCelebration({ achievement, onDismiss }: AchievementCelebrationProps) {
   const badge = achievement ? BADGES[achievement.badgeId] : null;
   const Icon = badge ? ACHIEVEMENT_ICONS[badge.iconKey as keyof typeof ACHIEVEMENT_ICONS] : null;
 
+  // Fire the feel layer when the celebration appears
+  useEffect(() => {
+    if (achievement && badge) feedback.milestone();
+  }, [achievement, badge]);
+
   return (
     <AnimatePresence>
       {achievement && badge && Icon && (
+      <>
+      {/* v2 §14.6 — canvas confetti replaces the 8 motion dots */}
+      <ConfettiCanvas active={achievement.badgeId} duration={2600} />
       <motion.div
         key={achievement.badgeId}
         initial={{ opacity: 0 }}
@@ -78,34 +89,6 @@ export function AchievementCelebration({ achievement, onDismiss }: AchievementCe
             {badge.description}
           </motion.p>
 
-          {/* Confetti dots */}
-          {[...Array(8)].map((_, i) => (
-            <motion.div
-              key={i}
-              initial={{
-                x: 0,
-                y: 0,
-                scale: 0,
-                opacity: 1,
-              }}
-              animate={{
-                x: (Math.random() - 0.5) * 300,
-                y: (Math.random() - 0.5) * 300,
-                scale: [0, 1.5, 0],
-                opacity: [1, 1, 0],
-              }}
-              transition={{
-                duration: 1.2,
-                delay: 0.4 + i * 0.05,
-                ease: 'easeOut',
-              }}
-              className="absolute w-2 h-2 rounded-full"
-              style={{
-                backgroundColor: ['#FFD700', '#00D4AA', '#FF6B35', '#4ECDC4', '#FF4444'][i % 5],
-              }}
-            />
-          ))}
-
           {/* Dismiss hint */}
           <motion.p
             initial={{ opacity: 0 }}
@@ -117,6 +100,7 @@ export function AchievementCelebration({ achievement, onDismiss }: AchievementCe
           </motion.p>
         </motion.div>
       </motion.div>
+      </>
       )}
     </AnimatePresence>
   );

@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
 
     const teams = await db.team.findMany({
       where,
-      include: { players: true },
+      // v2 §14.8/§17.7 — guests are one-off match players, never roster entries
+      include: { players: { where: { isGuest: false } } },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json(teams);

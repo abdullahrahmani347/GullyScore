@@ -23,7 +23,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { name, jerseyNumber, battingHand } = body;
+    const { name, jerseyNumber, battingHand, isGuest } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Player name is required' }, { status: 400 });
@@ -36,6 +36,8 @@ export async function POST(
         jerseyNumber: jerseyNumber || null,
         // v2 §13.2 — wagon wheel mirroring ('R' default, 'L' mirrors)
         ...(battingHand === 'L' ? { battingHand: 'L' } : {}),
+        // v2 §14.8/§17.7 — setup-wizard one-off guest (never in roster views)
+        ...(isGuest === true ? { isGuest: true } : {}),
       },
     });
 

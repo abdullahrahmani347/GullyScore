@@ -16,6 +16,8 @@ import {
   createInningsOffline,
 } from '@/lib/offline/fetch';
 import { predictAfterBall, newClientEventId, parseHouseRules, freeHitPending } from '@/lib/scoring-context';
+import { feedback } from '@/lib/feedback';
+import { liveBallsInOver } from '@/lib/scoring-ux';
 import type { ExtraType, WicketType, BallRecord } from '@/types';
 
 interface UseScoringHandlersProps {
@@ -89,6 +91,13 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     };
 
     const summary = getBallSummary(ballData);
+
+    // v2 §14.1 — feel layer on the write path (four/six/wicket/run)
+    if (!ballData.isWicket) {
+      if (runs === 4) feedback.four();
+      else if (runs === 6) feedback.six();
+      else feedback.run();
+    }
 
     // v2 §12.7 — optimistic update computed by the SAME engine the server
     // runs (fold over balls + proposed): the predicted post-ball state is
@@ -181,18 +190,25 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         if (result.strikerUpdate?.strikerId) {
           store.setStrike(result.strikerUpdate.strikerId, result.strikerUpdate.nonStrikerId);
         }
-        await mutate();
 
+        // Settle the state machine BEFORE revalidating: the page's [match]
+        // effect skips the store refresh while currentState is PROCESSING
+        // (the optimistic update is in flight). Revalidating first made that
+        // skip permanent — the reconcile effect then never re-fired (polls
+        // returned deep-equal data), so per-batter/bowler rows froze at their
+        // page-load values until a manual reload. Settling first means the
+        // revalidation lands with the final state and reconciles fully.
         if (result.isMatchComplete) store.setState('MATCH_RESULT');
         else if (result.needsInningsBreak) store.setState('INNINGS_BREAK');
         else if (result.needsNewBatsman) store.setState('NEW_BATSMAN');
         else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
         else store.setState('SCORING');
+        await mutate();
       }
     } catch (err) {
-      // Rollback: re-fetch actual data from server
-      await mutate();
+      // Rollback: settle first, then re-fetch actual data from the server
       store.setState('SCORING');
+      await mutate();
       const message = err instanceof Error ? err.message : 'Failed to record ball — please try again';
       toast.error(message, { duration: 4000 });
     } finally {
@@ -232,6 +248,9 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     };
 
     const summary = getBallSummary(ballData);
+
+    // v2 §14.1 — the wicket haptic + sound
+    feedback.wicket();
 
     // v2 §12.7 — optimistic update via the engine fold (same as server)
     const optimisticInnings = { ...store.currentInnings };
@@ -334,17 +353,18 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         if (result.strikerUpdate?.strikerId) {
           store.setStrike(result.strikerUpdate.strikerId, result.strikerUpdate.nonStrikerId);
         }
-        await mutate();
 
+        // Same ordering fix as handleScore: settle, then revalidate.
         if (result.isMatchComplete) store.setState('MATCH_RESULT');
         else if (result.needsInningsBreak) store.setState('INNINGS_BREAK');
         else if (result.needsNewBatsman) store.setState('NEW_BATSMAN');
         else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
         else store.setState('SCORING');
+        await mutate();
       }
     } catch (err) {
-      await mutate();
       store.setState('SCORING');
+      await mutate();
       const message = err instanceof Error ? err.message : 'Failed to record wicket — please try again';
       toast.error(message, { duration: 4000 });
     } finally {
@@ -402,13 +422,13 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
           throw new Error(result.error);
         }
         store.setLastBallResult(result);
-        await mutate();
         store.setState('SCORING');
+        await mutate();
         toast.success(`Penalty +${runs} to the ${pentingSideLabel(penaltySide)}${reason ? ` — ${reason}` : ''}`, { duration: 2500 });
       }
     } catch (err) {
-      await mutate();
       store.setState('SCORING');
+      await mutate();
       const message = err instanceof Error ? err.message : 'Failed to record penalty';
       toast.error(message, { duration: 4000 });
     } finally {
@@ -435,19 +455,64 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         store.setLastBallResult(null);
         store.setState('SCORING');
         setRedoAvailable(true);
+        feedback.light();
       } else {
         if (!result.success) {
           toast.error('Nothing to undo');
           return;
         }
-        await mutate();
         store.setLastBallResult(null);
         store.setState('SCORING');
         setRedoAvailable(true); // §12.7 — the tombstone is the log tail
+        feedback.light(); // v2 §14.1
+        await mutate();
         toast.success('Last ball undone');
       }
     } catch {
       toast.error('Failed to undo — please try again');
+    } finally {
+      store.setSubmitting(false);
+    }
+  }, [matchId, mutate]);
+
+  /**
+   * v2 §14.10 — long-press undo: "undo to start of over". Repeatedly removes
+   * the tail event until the CURRENT over is empty (undoing the whole over
+   * the scorer just bowled). No confirmation — it is discoverable, deliberate
+   * and visible in the scorecard; redo stays available per-event.
+   */
+  const handleUndoToOverStart = useCallback(async () => {
+    const store = useMatchStore.getState();
+    if (store.isSubmitting || !store.currentInnings || store.currentInnings.matchId !== matchId) return;
+
+    const innings = store.currentInnings;
+    const currentOver = innings.completedOvers;
+    const inOver = liveBallsInOver(innings.balls ?? [], currentOver);
+    if (inOver.length === 0) {
+      toast.info(`Already at the start of over ${currentOver + 1}`);
+      return;
+    }
+
+    store.setSubmitting(true);
+    try {
+      let undone = 0;
+      for (let i = 0; i < inOver.length; i++) {
+        const { data: result, offline } = await undoBallOffline(matchId, innings.id);
+        if (offline) {
+          undone++;
+          continue;
+        }
+        if (!result.success) break;
+        undone++;
+      }
+      store.setLastBallResult(null);
+      store.setState('SCORING');
+      setRedoAvailable(true);
+      feedback.light();
+      await mutate();
+      toast.success(`Undone to the start of over ${currentOver + 1} (${undone} ball${undone === 1 ? '' : 's'})`);
+    } catch {
+      toast.error('Could not undo to the start of the over');
     } finally {
       store.setSubmitting(false);
     }
@@ -470,11 +535,11 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
           setRedoAvailable(false);
           return;
         }
-        await mutate();
         toast.success('Ball restored');
       }
       setRedoAvailable(false);
       store.setState('SCORING');
+      await mutate(); // settle-then-revalidate (same reconcile fix as handleScore)
     } catch {
       toast.error('Failed to redo — please try again');
     } finally {
@@ -585,6 +650,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     handleWicket,
     handlePenalty,
     handleUndo,
+    handleUndoToOverStart,
     handleRedo,
     redoAvailable,
     handleSetStriker,

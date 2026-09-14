@@ -117,6 +117,8 @@ export function OverStrip({ currentInnings, match, onEditBall }: OverStripProps)
   const renderChip = (ball: BallRecord, i: number, isCurrentOver: boolean) => {
     const display = getBallDisplay(ball);
     const isFH = ball.isFreeHit === true;
+    // §14.3 — edited chips carry a small pencil dot (version > 1)
+    const isEdited = ball.version != null && ball.version > 1;
     return (
       <span key={ball.id} className="inline-flex items-center">
         {/* §12.8 — divider chip where the replacement bowler took over */}
@@ -130,14 +132,29 @@ export function OverStrip({ currentInnings, match, onEditBall }: OverStripProps)
           onPointerDown={isCurrentOver ? () => handleBallPressStart(ball) : undefined}
           onPointerUp={handleBallPressEnd}
           onPointerLeave={handleBallPressEnd}
-          className={`flex items-center justify-center min-w-[28px] h-[28px] rounded-full text-xs font-bold font-mono px-1.5 ${display.color} ${display.bg} ${
-            // §12.1 — amber ring on free-hit chips
-            isFH ? 'ring-2 ring-amber-400/80 ring-offset-1 ring-offset-bg-card' : ''
+          className={`relative flex items-center justify-center min-w-[28px] h-[28px] rounded-full text-xs font-bold font-mono px-1.5 ${display.color} ${display.bg} ${
+            // §14.0/§12.1 — free-hit ring uses the --free-hit token
+            isFH ? 'ring-2 ring-free-hit/80 ring-offset-1 ring-offset-bg-card' : ''
           } ${isCurrentOver && onEditBall ? 'cursor-pointer select-none active:scale-95' : ''}`}
-          title={isFH ? 'Free hit delivery' : isCurrentOver && onEditBall ? 'Long-press to edit this ball' : undefined}
+          title={
+            isEdited
+              ? `Edited (v${ball.version}) — long-press to edit again`
+              : isFH
+                ? 'Free hit delivery'
+                : isCurrentOver && onEditBall
+                  ? 'Long-press to edit this ball'
+                  : undefined
+          }
         >
-          {isFH ? <span className="mr-0.5 text-[8px] text-amber-400">FH</span> : null}
+          {isFH ? <span className="mr-0.5 text-[8px] text-free-hit">FH</span> : null}
           {display.label}
+          {/* §14.3 — the pencil dot marks a previously edited ball */}
+          {isEdited && (
+            <span
+              className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-free-hit border border-bg-card"
+              aria-label="Edited ball"
+            />
+          )}
         </motion.div>
       </span>
     );
@@ -145,16 +162,16 @@ export function OverStrip({ currentInnings, match, onEditBall }: OverStripProps)
 
   return (
     <div className={`rounded-xl bg-bg-card border px-3 py-2.5 transition-colors ${
-      ppActiveForCurrentOver ? 'border-gold/40' : 'border-border'
+      ppActiveForCurrentOver ? 'border-pp-gold/40' : 'border-border'
     }`}>
       <div className="flex items-center justify-between mb-1.5">
         <span className={`text-xs font-medium uppercase tracking-wider flex items-center gap-1.5 ${
-          ppActiveForCurrentOver ? 'text-gold' : 'text-t3'
+          ppActiveForCurrentOver ? 'text-pp-gold' : 'text-t3'
         }`}>
           {overLabel}
-          {/* §12.2 — gold tint marker while the powerplay is running */}
+          {/* §12.2/§14.0 — powerplay tint marker uses the --pp-gold token */}
           {ppActiveForCurrentOver && (
-            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold border border-gold/30">
+            <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-pp-gold/15 text-pp-gold border border-pp-gold/30">
               PP
             </span>
           )}
