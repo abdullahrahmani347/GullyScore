@@ -32,6 +32,16 @@ export async function POST(
       );
     }
 
+    // A degenerate pair (striker === non-striker) freezes strike rotation:
+    // fold() resyncs its pair from every ball's Before values, so one bad
+    // row poisons the whole chain. Reject it here at the source.
+    if (strikerId === nonStrikerId) {
+      return NextResponse.json(
+        { error: 'strikerId and nonStrikerId must be different players' },
+        { status: 400 }
+      );
+    }
+
     const innings = await db.innings.update({
       where: { id: iid },
       data: {

@@ -270,9 +270,27 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   }, [store, handleSetBowler]);
 
   const onNewBatsmanSelect = useCallback((playerId: string) => {
-    // Set as new striker (or non-striker if striker still exists)
-    const newStriker = store.nonStrikerId || playerId;
-    const newNonStriker = store.nonStrikerId ? playerId : '';
+    // [P7]/[P8]: the SURVIVOR keeps strike; the new batter takes the vacated
+    // end. The survivor is derived from the WICKET BALL's Before pair — NOT
+    // from store.strikerId, which under the pinned v1 [P9] quirk (or any
+    // mid-state race) can hold the OUT batter. The previous logic
+    // (`store.nonStrikerId || playerId`) put the NEW batter on strike and kept
+    // the non-striker slot EMPTY — the striker-route POST then failed its
+    // required-field validation, the innings row kept the pre-modal pair, and
+    // the next ball was credited against the wrong batter.
+    const balls = currentInnings?.balls ?? [];
+    const lastBall = balls[balls.length - 1];
+    const outId = lastBall?.isWicket ? (lastBall.dismissedPlayerId ?? lastBall.batsmanId) : null;
+    const sBefore = lastBall?.strikerIdBefore ?? null;
+    const nsBefore = lastBall?.nonStrikerIdBefore ?? null;
+    const survivorId =
+      outId && sBefore && outId === sBefore
+        ? nsBefore ?? store.strikerId // striker dismissed → non-striker survived [P7]
+        : outId && nsBefore && outId === nsBefore
+          ? sBefore ?? store.strikerId // non-striker dismissed → striker survived [P8]
+          : store.strikerId; // defensive fallback
+    const newStriker = survivorId || playerId;
+    const newNonStriker = survivorId ? playerId : '';
 
     store.setStrike(newStriker, newNonStriker);
     handleSetStriker(newStriker, newNonStriker).then(() => {
@@ -285,7 +303,7 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
         store.setState('SCORING');
       }
     });
-  }, [store, handleSetStriker]);
+  }, [store, handleSetStriker, currentInnings]);
 
   const onOverCompleteBowlerSelect = useCallback((bowlerId: string) => {
     store.setBowler(bowlerId);
@@ -441,6 +459,11 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
         currentInnings={currentInnings}
         onOpenChange={setMoreSheetOpen}
         onPenalty={handlePenalty}
+        onFixPair={async (strikerId, nonStrikerId) => {
+          // Patches the innings row (authoritative pair) + the store —
+          // recovers a stuck (degenerate) pair and scorer mistakes.
+          await handleSetStriker(strikerId, nonStrikerId);
+        }}
         mutate={mutate}
       />
 

@@ -710,9 +710,24 @@ export function fold(events: BallEvent[], rules: MatchRules): InningsState {
       // A non-striker retirement leaves the striker on strike (like [P8]).
       if (dismissedIsNonStriker) {
         nonStrikerId = null;
-      } else {
-        strikerId = nonStrikerId;
+      } else if (rules.strikeRotationV2) {
+        // v2 [P7]: the SURVIVOR takes strike — the non-striker BEFORE this
+        // delivery (state.nonStrikerId, pre-rotation; the local pair above
+        // only rotates at the very end). Reading the POST-rotation slot
+        // handed strike back to the OUT batter whenever this delivery itself
+        // rotated the pair (odd runs completed, or the over's last ball) —
+        // leaving a dismissed player "on strike" and corrupting every
+        // subsequent new-batter flow.
+        strikerId = state.nonStrikerId;
         nonStrikerId = null; // [P7]
+      } else {
+        // v1 [P9] parity quirk (pinned): the odd-run swap is applied FIRST,
+        // then the survivor is read from the POST-swap non-striker — which
+        // is the dismissed batter. The striker label is corrected by the UI
+        // new-batter flow (onNewBatsmanSelect derives the survivor from the
+        // wicket ball's Before pair), not the engine.
+        strikerId = nonStrikerId;
+        nonStrikerId = null; // [P7]/[P9]
       }
     }
     if (nonStrikerRunOut) {
@@ -964,6 +979,38 @@ export function powerplaySplit(state: InningsState, rules: MatchRules): Powerpla
 /** True when the bowler is credited for this dismissal type (§12.6). */
 export function isBowlerCredited(type: WicketType): boolean {
   return !NON_BOWLER_CREDITED.includes(type);
+}
+
+/**
+ * §12.7 write path — the striker pair "Before" a ball, derived from the
+ * INNINGS ROW (the authoritative pair at write time), not from a fold of the
+ * event log.
+ *
+ * Why the row: the striker route (openers setup, new batter after a wicket,
+ * manual swap) patches innings.strikerId / nonStrikerId BETWEEN balls, and
+ * recalculate() re-writes the pair after every ball. The fold of an empty or
+ * mid-innings history cannot supply this — before the first ball its pair is
+ * null, and a `?? batsmanId` fallback would record the striker as his own
+ * non-striker (a degenerate (A, A) pair). Because fold() resyncs
+ * state.nonStrikerId from every event's nonStrikerIdBefore, that single bad
+ * value freezes strike rotation for the rest of the innings: every swap
+ * exchanges A with A, the non-striker never comes on strike, and every ball
+ * is credited to the opening striker.
+ *
+ * Fallbacks:
+ *   - row striker null (row never initialised) → the client's batsmanId,
+ *     which IS the striker for this delivery.
+ *   - row non-striker null → null (§12.10 lone batter: no rotation).
+ */
+export function beforePairFor(
+  rowStriker: string | null,
+  rowNonStriker: string | null,
+  batsmanId: string
+): { strikerIdBefore: string; nonStrikerIdBefore: string | null } {
+  return {
+    strikerIdBefore: rowStriker ?? batsmanId,
+    nonStrikerIdBefore: rowNonStriker ?? null,
+  };
 }
 
 /**

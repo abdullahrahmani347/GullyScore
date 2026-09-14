@@ -30,6 +30,7 @@ import {
   validateNext,
   replayValidate,
   parseMatchRules,
+  beforePairFor,
   type BallEvent,
   type MatchRules,
   type InningsState,
@@ -72,6 +73,9 @@ interface LoadedInnings {
   totalOvers: number;
   inningsNumber: number;
   target: number | null;
+  /** The pair at write time — the striker route patches this BETWEEN balls. */
+  strikerId: string | null;
+  nonStrikerId: string | null;
   events: BallEvent[];
 }
 
@@ -112,6 +116,8 @@ async function loadInnings(inningsId: string): Promise<LoadedInnings> {
     totalOvers: innings.match.totalOvers,
     inningsNumber: innings.inningsNumber,
     target: innings.target,
+    strikerId: innings.strikerId,
+    nonStrikerId: innings.nonStrikerId,
     events: hydrateEvents(innings.balls),
   };
 }
@@ -201,6 +207,15 @@ export async function recordBall(
   const lastDelivery = loaded.events[loaded.events.length - 1];
   const nextDeliveryNumber = (lastDelivery?.deliveryNumber ?? 0) + 1;
 
+  // §12.7 — the striker pair BEFORE this ball comes from the INNINGS ROW (the
+  // authoritative pair at write time; the striker route patches it between
+  // balls). The previous implementation derived it from the fold, whose pair
+  // is null before the first ball — the `?? batsmanId` fallback then recorded
+  // the striker as his own non-striker ((A, A)) and froze strike rotation for
+  // the entire innings: the non-striker never batted and every run was
+  // credited to the opening striker. See beforePairFor() for the full rationale.
+  const pair = beforePairFor(loaded.strikerId, loaded.nonStrikerId, input.batsmanId);
+
   const proposed: BallEvent = {
     deliveryNumber: nextDeliveryNumber,
     batsmanId: input.batsmanId,
@@ -212,8 +227,8 @@ export async function recordBall(
     wicketType: input.wicketType ?? null,
     dismissedPlayerId: input.dismissedPlayerId ?? null,
     fielderPlayerId: input.fielderPlayerId ?? null,
-    strikerIdBefore: state.strikerId,
-    nonStrikerIdBefore: state.nonStrikerId,
+    strikerIdBefore: pair.strikerIdBefore,
+    nonStrikerIdBefore: pair.nonStrikerIdBefore,
     clientEventId: input.clientEventId ?? null,
     penaltySide: input.penaltySide ?? null,
     reason: input.reason ?? null,
@@ -246,8 +261,12 @@ export async function recordBall(
       extraType: input.extraType ?? null,
       extraRuns: input.extraRuns,
       isLegalDelivery: !isNoBall && !isWide && !isPenalty,
-      strikerIdBefore: state.strikerId ?? input.batsmanId,
-      nonStrikerIdBefore: state.nonStrikerId ?? input.batsmanId,
+      strikerIdBefore: pair.strikerIdBefore,
+      // The column is NOT NULL — a lone-batter innings (§12.10, row nonStriker
+      // null) falls back to the batsmanId placeholder. In the fold that
+      // (S, S) pair is a rotation no-op (swapping S with S), preserving
+      // lone-batter semantics.
+      nonStrikerIdBefore: pair.nonStrikerIdBefore ?? input.batsmanId,
       // §12.1 free-hit flags
       isFreeHit: state.freeHitPending && rules.freeHitOnNoBall && !isPenalty,
       causedFreeHit: rules.freeHitOnNoBall && isNoBall,

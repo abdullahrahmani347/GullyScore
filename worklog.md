@@ -848,3 +848,24 @@ Stage Summary:
 - Old-match-display bug fixed at 3 layers (render guard, pre-paint store reset, write-path guards)
 - Offline resilience for same-match reload preserved (persistedMatch fallback keyed by match id)
 - No engine/API/schema changes — purely client-side
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Fix strike rotation — non-striker never bats, all runs credited to striker
+
+Work Log:
+- ROOT CAUSE 1 (primary): recordBall derived each event's strikerIdBefore/nonStrikerIdBefore from the FOLD state — null before the first ball — with a `?? input.batsmanId` fallback that recorded the striker as his own non-striker (A, A). fold() resyncs its pair from every event's Before values, so ball 1 poisoned the chain: canSwap swapped A↔A forever, strikerUpdate always returned (A, A), the client kept sending the same batsmanId, the non-striker never batted and every run was credited to the opening striker.
+- Fix 1: added beforePairFor() (engine.ts, pure) — Before values derive from the INNINGS ROW (authoritative pair at write time; striker route patches it between balls; recalculate rewrites it after every ball). recordBall uses it for both the proposed event and the DB write. DB column is NOT NULL → lone-batter placeholder falls back to batsmanId at the write boundary only ((S,S) is a rotation no-op).
+- ROOT CAUSE 2: fold's dismissal override read the POST-rotation non-striker — a striker wicket on odd runs or the over's last ball handed strike back to the OUT batter.
+- Fix 2: v2 rules ([P7]) — striker := state.nonStrikerId (pre-rotation survivor). v1 parity keeps the pinned [P9] quirk (unit test documented it); the UI corrects the label instead.
+- ROOT CAUSE 3: onNewBatsmanSelect put the NEW batter on strike with an EMPTY non-striker — the striker-route POST 400'd (required field), the innings row kept the pre-modal pair, and subsequent balls were credited to the wrong batter.
+- Fix 3: survivor (derived from the wicket ball's Before pair — robust under both v1 quirk and v2) keeps strike; the new batter fills the vacated end; POST succeeds.
+- Recovery tool: MoreSheet "Fix batters" — re-select the on-strike/other-end pair (patches the row via handleSetStriker); a ⚠ banner surfaces degenerate (striker === non-striker) rows so users can repair matches corrupted by the old bug.
+- Striker route: 400 on strikerId === nonStrikerId (degenerate pair rejected at the source).
+- Tests: +6 regression tests (row-derived Before rotation from ball 1, wicket + new-batter via striker route, OLD (A,A) contrast, v2 over-end wicket survivor, v2 RUN_OUT-odd survivor, beforePairFor table). 184/184 pass, golden fixtures intact, tsc clean, next build green.
+
+Stage Summary:
+- Strike rotation fully fixed for new matches (v2 rules): rotation from ball 1, survivor semantics, working new-batter flow
+- v1-parity preserved (golden fixtures + pinned [P9] quirk); v1 matches get correct behavior via the UI flow
+- "Fix batters" tool recovers matches corrupted by the old bug (historical misattributed runs cannot be auto-repaired — those matches should be re-scored or the pair fixed going forward)

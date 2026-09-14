@@ -32,6 +32,7 @@ import {
   dedupeEvents,
   decimalOvers,
   isBowlerCredited,
+  beforePairFor,
   type BallEvent,
   type MatchRules,
   type InningsState,
@@ -1218,6 +1219,178 @@ describe('§12.9 rich extras entry validation', () => {
     expect(validateNext(st, rules, ev({ extraType: 'BYE', extraRuns: 5 })).ok).toBe(false);
     expect(validateNext(st, rules, ev({ extraType: 'NO_BALL', extraRuns: 1 })).ok).toBe(true);
     expect(validateNext(st, rules, ev({ extraType: 'NO_BALL', extraRuns: 2 })).ok).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §12.7 WRITE-PATH BEFORE-PAIR DERIVATION — regression: frozen strike rotation
+// ---------------------------------------------------------------------------
+// The write path (recordBall) stamps every event with the striker pair BEFORE
+// the ball. This pair MUST come from the innings row (authoritative at write
+// time, patched by the striker route between balls). The old implementation
+// derived it from the fold — null before the first ball — and its
+// `?? batsmanId` fallback recorded the striker as his own non-striker (A, A).
+// fold() resyncs its pair from every event's nonStrikerIdBefore, so that one
+// bad value froze rotation for the whole innings: the non-striker never came
+// on strike and every run was credited to the opening striker.
+// ---------------------------------------------------------------------------
+
+describe('§12.7 write-path Before-pair derivation (regression: frozen strike rotation)', () => {
+  test('row-derived Before: a single on ball 1 rotates strike and BOTH batters are credited', () => {
+    const rules = V2();
+    // Mirror the real write path: the row holds the openers, each event's
+    // Before comes from beforePairFor(row), and recalculate() writes the
+    // folded pair back to the row after every ball.
+    let rowStriker: string | null = 'S1';
+    let rowNonStriker: string | null = 'S2';
+    const events: BallEvent[] = [];
+    const record = (clientStriker: string, runs: number) => {
+      const pair = beforePairFor(rowStriker, rowNonStriker, clientStriker);
+      events.push(
+        ev({
+          batsmanId: clientStriker,
+          runs,
+          strikerIdBefore: pair.strikerIdBefore,
+          nonStrikerIdBefore: pair.nonStrikerIdBefore,
+          deliveryNumber: events.length + 1,
+        })
+      );
+      const state = fold(events, rules); // = recalculate
+      rowStriker = state.strikerId; // = db.innings.update
+      rowNonStriker = state.nonStrikerId;
+      return state;
+    };
+
+    // The client's striker mirrors strikerUpdate (the folded pair).
+    let st = record('S1', 1); // single → rotate to S2
+    expect(st.strikerId).toBe('S2');
+    expect(st.nonStrikerId).toBe('S1');
+    expect(st.batting['S1']?.runs).toBe(1);
+
+    st = record(st.strikerId!, 1); // S2 single → rotate back to S1
+    expect(st.strikerId).toBe('S1');
+    expect(st.batting['S2']?.runs).toBe(1); // the partner IS batting
+
+    st = record(st.strikerId!, 4); // S1 four (even) keeps strike
+    expect(st.strikerId).toBe('S1');
+    expect(st.batting['S1']?.runs).toBe(5);
+  });
+
+  test('row-derived Before survives a wicket + new batter via the striker route', () => {
+    const rules = V2();
+    let rowStriker: string | null = 'S1';
+    let rowNonStriker: string | null = 'S2';
+    const events: BallEvent[] = [];
+    const record = (clientStriker: string, partial: Partial<BallEvent>) => {
+      const pair = beforePairFor(rowStriker, rowNonStriker, clientStriker);
+      events.push(
+        ev({
+          batsmanId: clientStriker,
+          strikerIdBefore: pair.strikerIdBefore,
+          nonStrikerIdBefore: pair.nonStrikerIdBefore,
+          deliveryNumber: events.length + 1,
+          ...partial,
+        })
+      );
+      const state = fold(events, rules);
+      rowStriker = state.strikerId;
+      rowNonStriker = state.nonStrikerId;
+      return state;
+    };
+
+    // S1 caught behind (over strike). Survivor S2 takes strike; row pair (S2, null).
+    let st = record('S1', { isWicket: true, wicketType: 'CAUGHT' });
+    expect(st.strikerId).toBe('S2');
+    expect(st.nonStrikerId).toBeNull();
+    expect(st.batting['S1']?.isOut).toBe(true);
+
+    // New batter C selected via the striker route → row pair (S2, C).
+    rowStriker = 'S2';
+    rowNonStriker = 'C';
+
+    // C is on strike after an odd single by S2.
+    st = record('S2', { runs: 1 });
+    expect(st.strikerId).toBe('C');
+    expect(st.nonStrikerId).toBe('S2');
+    // C drives a two — credited to C, strike retained.
+    st = record('C', { runs: 2 });
+    expect(st.strikerId).toBe('C');
+    expect(st.batting['C']?.runs).toBe(2);
+    expect(st.batting['S2']?.runs).toBe(1);
+  });
+
+  test('the OLD fold+batsmanId fallback produced (A, A) and froze rotation — documented contrast', () => {
+    const rules = V2();
+    const events: BallEvent[] = [];
+    const oldBefore = (batsmanId: string) => {
+      const state = fold(events, rules);
+      return {
+        strikerIdBefore: state.strikerId ?? batsmanId,
+        nonStrikerIdBefore: state.nonStrikerId ?? batsmanId, // ← the bug
+      };
+    };
+    for (let i = 0; i < 6; i++) {
+      const before = oldBefore('S1');
+      events.push(
+        ev({
+          batsmanId: 'S1',
+          runs: 1,
+          strikerIdBefore: before.strikerIdBefore,
+          nonStrikerIdBefore: before.nonStrikerIdBefore,
+          deliveryNumber: i + 1,
+        })
+      );
+    }
+    const st = fold(events, rules);
+    expect(st.strikerId).toBe('S1'); // never rotated
+    expect(st.batting['S1']?.runs).toBe(6); // everything to the opener
+    expect(st.batting['S2']).toBeUndefined(); // partner never batted
+  });
+
+  test('v2 [P7]: wicket on the LAST ball of the over — survivor takes strike (not the out batter)', () => {
+    // Real cricket: striker caught on the over's final ball; the ends swap
+    // for the next over, so the SURVIVOR faces. The pre-fix engine read the
+    // post-swap non-striker — the OUT batter — and left him "on strike".
+    const rules = V2();
+    const events: BallEvent[] = [];
+    for (let i = 1; i <= 5; i++) {
+      events.push(ev({ deliveryNumber: i, batsmanId: i % 2 === 1 ? 'S1' : 'S2' }));
+    }
+    events.push(
+      ev({ deliveryNumber: 6, batsmanId: 'S1', isWicket: true, wicketType: 'CAUGHT' })
+    );
+    const st = fold(events, rules);
+    expect(st.batting['S1']?.isOut).toBe(true);
+    expect(st.strikerId).toBe('S2'); // the survivor
+    expect(st.nonStrikerId).toBeNull(); // new-batter modal refills this
+  });
+
+  test('v2 [P7]: run-out of the striker with odd runs — survivor takes strike (v1 [P9] quirk fixed under v2)', () => {
+    // The batters crossed on the completed single; the out batter is at the
+    // far end. v1 parity (pinned) leaves the OUT batter as striker; v2 hands
+    // strike to the survivor.
+    const rules = V2();
+    const st = fold(
+      [ev({ runs: 1, isWicket: true, wicketType: 'RUN_OUT', dismissedPlayerId: 'S1' })],
+      rules
+    );
+    expect(st.strikerId).toBe('S2'); // survivor
+    expect(st.nonStrikerId).toBeNull();
+  });
+
+  test('beforePairFor: lone batter keeps a null non-striker (no fabricated partner)', () => {
+    expect(beforePairFor('S1', null, 'S1')).toEqual({
+      strikerIdBefore: 'S1',
+      nonStrikerIdBefore: null,
+    });
+    expect(beforePairFor(null, null, 'S9')).toEqual({
+      strikerIdBefore: 'S9',
+      nonStrikerIdBefore: null,
+    });
+    expect(beforePairFor('S1', 'S2', 'S1')).toEqual({
+      strikerIdBefore: 'S1',
+      nonStrikerIdBefore: 'S2',
+    });
   });
 });
 
