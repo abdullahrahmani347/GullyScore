@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { QrCode, X, Copy, Check, Share2, Radio } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { MatchData } from '@/types';
 
@@ -87,6 +87,9 @@ export function LiveShareModal({ open, onOpenChange, match }: LiveShareModalProp
             <QrCode size={20} className="text-accent" />
             Live Share
           </DialogTitle>
+          <DialogDescription className="text-t3 text-xs">
+            Anyone with this code or link can follow the match live.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col items-center py-4">

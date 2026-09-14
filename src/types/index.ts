@@ -30,6 +30,8 @@ export interface Player {
   name: string;
   teamId: string;
   jerseyNumber?: number | null;
+  /** v2 §13.2 — 'R' | 'L' (wagon wheel mirroring); undefined = right-hand. */
+  battingHand?: string | null;
 }
 
 export interface Team {
@@ -122,6 +124,10 @@ export interface BallRecord {
   version?: number;
   clientEventId?: string | null;
   meta?: string | null;
+  // v2 §13.2/§13.3 — wagon wheel + pitch map capture
+  wagonDirection?: string | null;
+  pitchLength?: string | null;
+  pitchLine?: string | null;
 }
 
 export interface MatchData {
@@ -146,6 +152,8 @@ export interface MatchData {
   // v2 §12.10/§12.3 — house rules JSON + overs-adjustment audit log (JSON strings)
   rules?: string | null;
   adjustments?: string | null;
+  // v2 §13.10 — cached AI match report JSON (null = not generated)
+  reportJson?: string | null;
   innings: InningsState[];
 }
 
@@ -205,6 +213,8 @@ export interface RecordBallResponse {
     ballsRemaining: number | null;
     isCompleted: boolean;
     isOverComplete: boolean;
+    /** v2 §13.1 — win probability for the batting team (null before any context). */
+    winProbability?: number | null;
   };
   strikerUpdate: { strikerId: string; nonStrikerId: string };
   needsNewBatsman: boolean;

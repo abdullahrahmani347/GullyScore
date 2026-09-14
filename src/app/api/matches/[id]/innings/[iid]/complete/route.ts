@@ -28,10 +28,24 @@ export async function POST(
     });
 
     if (innings.isCompleted) {
-      return NextResponse.json(
-        { error: 'Innings is already completed' },
-        { status: 400 }
-      );
+      // Idempotent double-complete (auto-complete + user tap, or an offline
+      // replay): return the CURRENT state with 200 instead of a 400 that the
+      // client would otherwise queue and replay forever.
+      if (innings.inningsNumber === 1) {
+        const second = await db.innings.findFirst({
+          where: { matchId: id, inningsNumber: 2 },
+        });
+        return NextResponse.json({
+          message: '1st innings completed. 2nd innings created.',
+          secondInnings: second,
+          target: second?.target ?? innings.runs + 1,
+          alreadyCompleted: true,
+        });
+      }
+      return NextResponse.json({
+        message: '2nd innings completed. Match is ready for completion.',
+        alreadyCompleted: true,
+      });
     }
 
     // Mark current innings as completed

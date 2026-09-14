@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateResultString } from '@/lib/scoring-utils';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
+import { isFeatureEnabled } from '@/lib/features';
+import { triggerAiReportGeneration } from '@/lib/match-report';
 
 export async function POST(
   request: NextRequest,
@@ -98,6 +100,12 @@ export async function POST(
     // Update tournament stats if match belongs to a tournament
     if (match.tournamentId) {
       await updateTournamentStats(match.tournamentId, match.team1Id, match.team2Id, winnerId, inn1, inn2);
+    }
+
+    // v2 §13.10 — async AI match report (flag-gated, NEVER blocks completion;
+    // the report page / match screen toasts when it lands)
+    if (isFeatureEnabled('aiReport')) {
+      triggerAiReportGeneration(id);
     }
 
     return NextResponse.json(updatedMatch);

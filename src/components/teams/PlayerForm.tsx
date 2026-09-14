@@ -8,6 +8,8 @@ export interface PlayerEntry {
   id?: string;
   name: string;
   jerseyNumber: string;
+  /** v2 §13.2 — 'R' (default) | 'L' — wagon wheel mirroring */
+  battingHand?: 'R' | 'L';
 }
 
 interface PlayerFormProps {
@@ -27,6 +29,13 @@ export function PlayerForm({ players, onChange }: PlayerFormProps) {
   const updatePlayer = (index: number, field: keyof PlayerEntry, value: string) => {
     const updated = [...players];
     updated[index] = { ...updated[index], [field]: value };
+    onChange(updated);
+  };
+
+  const toggleHand = (index: number) => {
+    const updated = [...players];
+    const current = updated[index].battingHand ?? 'R';
+    updated[index] = { ...updated[index], battingHand: current === 'R' ? 'L' : 'R' };
     onChange(updated);
   };
 
@@ -69,6 +78,20 @@ export function PlayerForm({ players, onChange }: PlayerFormProps) {
             type="number"
             className="h-9 bg-bg-input border-border text-t1 text-sm placeholder:text-t3 w-16"
           />
+          {/* v2 §13.2 — batting hand toggle (R/L, mirrors the wagon wheel) */}
+          <button
+            type="button"
+            onClick={() => toggleHand(index)}
+            className={`h-9 w-9 rounded-md border text-[11px] font-mono font-semibold flex-shrink-0 transition-colors ${
+              (player.battingHand ?? 'R') === 'L'
+                ? 'border-accent/50 text-accent bg-accent/10'
+                : 'border-border text-t3 bg-bg-input hover:text-t2'
+            }`}
+            title="Batting hand — tap to switch (mirrors the wagon wheel)"
+            aria-label={`Batting hand for ${player.name || 'player'}: ${(player.battingHand ?? 'R') === 'L' ? 'left' : 'right'}-hand`}
+          >
+            {(player.battingHand ?? 'R') === 'L' ? 'L' : 'R'}
+          </button>
           <Button
             type="button"
             variant="ghost"

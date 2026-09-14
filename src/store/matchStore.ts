@@ -9,6 +9,25 @@ import type { MatchStoreState, MatchData, InningsState, ScoringState, RecordBall
  * a page refresh during an offline session doesn't lose the scorer's state.
  * When connectivity restores, SWR will reconcile the server state.
  */
+
+/**
+ * Normalize any innings-shaped object into a full InningsState.
+ * Raw rows (POST /innings returns the bare Prisma record; offline creates
+ * return a stub; persisted state may predate v2 columns) can lack the
+ * batting/bowling/balls/partnerships arrays — every consumer in the scoring
+ * UI iterates them, so defaulting here kills the whole class of
+ * "X is not iterable" crashes at the store boundary.
+ */
+function normalizeInnings(innings: InningsState): InningsState {
+  return {
+    ...innings,
+    batting: Array.isArray(innings.batting) ? innings.batting : [],
+    bowling: Array.isArray(innings.bowling) ? innings.bowling : [],
+    balls: Array.isArray(innings.balls) ? innings.balls : [],
+    partnerships: Array.isArray(innings.partnerships) ? innings.partnerships : [],
+  } as InningsState;
+}
+
 export const useMatchStore = create<MatchStoreState>()(
   persist(
     (set) => ({
@@ -23,7 +42,7 @@ export const useMatchStore = create<MatchStoreState>()(
 
       setMatch: (match: MatchData) => set({ match }),
       setCurrentInnings: (innings: InningsState) => set({
-        currentInnings: innings,
+        currentInnings: normalizeInnings(innings),
         strikerId: innings.strikerId ?? null,
         nonStrikerId: innings.nonStrikerId ?? null,
         currentBowlerId: innings.currentBowlerId ?? null,
@@ -33,7 +52,7 @@ export const useMatchStore = create<MatchStoreState>()(
        *  so the batting list refreshes while preserving the scorer's pending selections.
        */
       refreshInningsData: (innings: InningsState) => set({
-        currentInnings: innings,
+        currentInnings: normalizeInnings(innings),
       }),
       setStrike: (strikerId: string, nonStrikerId: string) => set({ strikerId, nonStrikerId }),
       setBowler: (bowlerId: string) => set({ currentBowlerId: bowlerId }),
@@ -64,6 +83,16 @@ export const useMatchStore = create<MatchStoreState>()(
         currentBowlerId: state.currentBowlerId,
         lastBallResult: state.lastBallResult,
       }),
+      // Rehydrate through the same normalizer — persisted state from an
+      // older build may carry shapeless innings rows.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<MatchStoreState>;
+        return {
+          ...current,
+          ...p,
+          currentInnings: p.currentInnings ? normalizeInnings(p.currentInnings) : current.currentInnings,
+        };
+      },
     }
   )
 );

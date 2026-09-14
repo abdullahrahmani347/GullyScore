@@ -48,6 +48,8 @@ export async function GET(
     const scorecard = {
       id: match.id,
       status: match.status,
+      team1Id: match.team1Id,
+      team2Id: match.team2Id,
       totalOvers: match.totalOvers,
       maxWickets: match.maxWickets,
       tossWinnerId: match.tossWinnerId,
@@ -58,11 +60,14 @@ export async function GET(
       createdAt: match.createdAt,
       completedAt: match.completedAt,
       tournamentId: match.tournamentId,
+      // v2 §12.10/§13 — house rules JSON (wagon/pitch capture display + fold parity)
+      rules: match.rules,
       team1: match.team1,
       team2: match.team2,
       innings: match.innings.map((inn) => ({
         id: inn.id,
         inningsNumber: inn.inningsNumber,
+        teamId: inn.teamId,
         team: inn.team,
         runs: inn.runs,
         wickets: inn.wickets,
@@ -79,6 +84,7 @@ export async function GET(
         currentBowlerId: inn.currentBowlerId,
         batting: inn.batting.map((b) => ({
           id: b.id,
+          playerId: b.playerId,
           player: b.player,
           runs: b.runs,
           balls: b.balls,
@@ -92,9 +98,11 @@ export async function GET(
         })),
         bowling: inn.bowling.map((b) => ({
           id: b.id,
+          playerId: b.playerId,
           player: b.player,
           completedOvers: b.completedOvers,
           balls: b.balls,
+          maidens: b.maidens,
           runs: b.runs,
           wickets: b.wickets,
           wides: b.wides,

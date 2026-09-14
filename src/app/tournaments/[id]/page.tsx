@@ -24,6 +24,7 @@ import { PageWrapper } from '@/components/layout/PageWrapper';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PointsTable } from '@/components/tournaments/PointsTable';
 import { ScheduleList } from '@/components/tournaments/ScheduleList';
+import { TournamentMvpCard } from '@/components/analytics';
 import {
   Sheet,
   SheetContent,
@@ -479,7 +480,16 @@ export default function TournamentDetailPage() {
                 </Button>
               </div>
             ) : pointsData ? (
-              <PointsTable pointsTable={pointsData.pointsTable} />
+              <div className="space-y-3">
+                <PointsTable pointsTable={pointsData.pointsTable} />
+                {/* v2 §13.5 — season MVP leaderboard across completed matches */}
+                <TournamentMvpCard
+                  matches={(tournament?.matches ?? []) as unknown as MatchData[]}
+                  teamNames={Object.fromEntries(
+                    (tournament?.teams ?? []).map((t) => [t.team.id, t.team.shortName])
+                  )}
+                />
+              </div>
             ) : (
               <Skeleton className="h-48 rounded-xl bg-bg-card" />
             )}

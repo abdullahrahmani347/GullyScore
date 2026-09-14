@@ -19,9 +19,10 @@ import { InningsBreakScreen } from './InningsBreakScreen';
 import { MatchResultScreen } from './MatchResultScreen';
 import { MoreSheet } from './MoreSheet';
 import { BallEditorSheet } from './BallEditorSheet';
+import { WagonPromptSheet, PitchMapPromptSheet, wagonPromptDisabled } from '@/components/analytics';
 import { toast } from 'sonner';
 import { computeMilestoneAlerts, generateCommentary, getBatsmanMilestone } from '@/lib/intelligence';
-import { freeHitPending } from '@/lib/scoring-context';
+import { freeHitPending, parseHouseRules } from '@/lib/scoring-context';
 import type { ExtraType, CommentaryEvent, BallRecord, WicketType } from '@/types';
 
 interface ScoringScreenProps {
@@ -53,6 +54,9 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   // v2 §12.7 — ball editor (long-press an OverStrip chip)
   const [editBall, setEditBall] = useState<BallRecord | null>(null);
+  // v2 §13.2/§13.3 — post-ball capture prompts (wagon wheel, pitch map)
+  const [wagonBall, setWagonBall] = useState<BallRecord | null>(null);
+  const [pitchBall, setPitchBall] = useState<BallRecord | null>(null);
 
   // ── Intelligence Layer State ──
   const [commentary, setCommentary] = useState<CommentaryEvent | null>(null);
@@ -72,7 +76,9 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   const trackBatsmanRunsBefore = useCallback(() => {
     if (!currentInnings) return;
     const runsMap: Record<string, number> = {};
-    for (const b of currentInnings.batting) {
+    // Defensive: raw/offline innings rows can lack batting (store normalizes,
+    // but the persisted state may predate that fix)
+    for (const b of currentInnings.batting ?? []) {
       runsMap[b.playerId] = b.runs;
     }
     previousBatsmanRunsRef.current = runsMap;
@@ -203,6 +209,44 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
     lastCommentedBallId.current = lastBallResult.ball.id;
     triggerCommentary(lastBallResult.ball);
   }, [lastBallResultId, currentInnings, match, triggerCommentary, lastBallResult]);
+
+  // ── v2 §13.2/§13.3 — post-ball capture orchestration ──
+  // Wagon prompt (post-boundary, 1 tap) first; the pitch map (2 taps)
+  // queues behind it so a boundary with both rules on costs 3 taps total.
+  const houseRules = useMemo(
+    () => parseHouseRules(match?.rules ?? null),
+    [match?.rules]
+  );
+
+  useEffect(() => {
+    const ball = lastBallResult?.ball;
+    if (!ball || !currentInnings || !match) return;
+    // Only server-confirmed balls (offline queue items carry no real id)
+    if (typeof ball.id !== 'string' || ball.id.startsWith('optimistic-')) return;
+    // State-machine modals take priority over capture sheets this ball
+    if (lastBallResult?.needsNewBatsman || lastBallResult?.needsInningsBreak || lastBallResult?.isMatchComplete) return;
+
+    const wagonMode = houseRules?.wagonCapture ?? 'off'; // legacy matches: off
+    const isBoundary = ball.runs >= 4 && ball.extraType !== 'WIDE';
+    const isScoringShot = ball.runs > 0;
+    const wantsWagon =
+      wagonMode !== 'off' &&
+      !wagonPromptDisabled() &&
+      ball.wagonDirection == null &&
+      (wagonMode === 'all' ? isScoringShot : isBoundary);
+    const wantsPitch =
+      houseRules?.pitchMapCapture === true &&
+      ball.isLegalDelivery &&
+      ball.pitchLength == null;
+
+    if (wantsWagon) {
+      setWagonBall(ball);
+      if (wantsPitch) setPitchBall(ball); // queued — shows after the wagon tap
+    } else if (wantsPitch) {
+      setPitchBall(ball);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastBallResultId]);
 
   // Player selection handlers
   const onOpenerSelect = useCallback((playerId: string) => {
@@ -409,6 +453,38 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
         onOpenChange={(o) => !o && setEditBall(null)}
         mutate={mutate}
       />
+
+      {/* v2 §13.2 — wagon wheel capture (post-boundary, 1 tap) */}
+      {wagonBall && match && (
+        <WagonPromptSheet
+          open
+          onOpenChange={(o) => {
+            if (!o) setWagonBall(null);
+          }}
+          matchId={matchId}
+          inningsId={wagonBall.inningsId}
+          ballId={wagonBall.id}
+          runs={wagonBall.runs}
+          leftHand={
+            (currentInnings?.team?.players ?? []).find((p) => p.id === wagonBall.batsmanId)?.battingHand === 'L'
+          }
+          onSaved={() => { mutate(); }}
+        />
+      )}
+
+      {/* v2 §13.3 — pitch map capture (2 taps; queued behind the wagon) */}
+      {pitchBall && !wagonBall && match && (
+        <PitchMapPromptSheet
+          open
+          onOpenChange={(o) => {
+            if (!o) setPitchBall(null);
+          }}
+          matchId={matchId}
+          inningsId={pitchBall.inningsId}
+          ballId={pitchBall.id}
+          onSaved={() => { mutate(); }}
+        />
+      )}
     </>
   );
 

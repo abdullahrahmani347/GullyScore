@@ -23,6 +23,8 @@ export async function GET(
                 team: true,
                 batting: { include: { player: true } },
                 bowling: { include: { player: true } },
+                // v2 §13.5 — fielding credits + dots for the MVP leaderboard
+                balls: { orderBy: { deliveryNumber: 'asc' } },
               },
               orderBy: { inningsNumber: 'asc' },
             },

@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDeviceIdFromRequest, verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
+import { teamFormStrip, lastFiveBatting, type FormInning, type TeamFormResult } from '@/lib/intelligence';
 
 export async function GET(
   request: NextRequest,
@@ -66,10 +67,63 @@ export async function GET(
       }
     }
 
+    // ── v2 §13.7 — FORM GUIDES ─────────────────────────────────────────
+    // W/Q strip for the team + last-5 batting chips per player.
+    const formMatches = await db.match.findMany({
+      where: {
+        ...(deviceId ? { deviceId } : {}),
+        OR: [{ team1Id: id }, { team2Id: id }],
+        status: { in: ['COMPLETED', 'ABANDONED'] },
+      },
+      select: { id: true, status: true, winnerId: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const teamForm: TeamFormResult[] = teamFormStrip(
+      formMatches.map((m) => ({ winnerId: m.winnerId, status: m.status })),
+      id
+    );
+
+    const playerIds = team.players.map((p) => p.id);
+    const battingRows = playerIds.length
+      ? await db.batsmanInnings.findMany({
+          where: { playerId: { in: playerIds } },
+          include: {
+            innings: {
+              include: {
+                team: { select: { id: true, name: true } },
+                match: { include: { team1: { select: { id: true, name: true } }, team2: { select: { id: true, name: true } } } },
+              },
+            },
+          },
+          orderBy: { innings: { match: { createdAt: 'asc' } } },
+        })
+      : [];
+    const playerForm: Record<string, FormInning[]> = {};
+    for (const row of battingRows) {
+      const opp =
+        row.innings.teamId === row.innings.match.team1Id
+          ? row.innings.match.team2.name
+          : row.innings.match.team1.name;
+      const list = playerForm[row.playerId] ?? [];
+      list.push({
+        runs: row.runs,
+        isOut: row.isOut,
+        balls: row.balls,
+        matchId: row.innings.matchId,
+        date: row.innings.match.createdAt,
+        opposition: opp,
+      });
+      playerForm[row.playerId] = list;
+    }
+    for (const pid of Object.keys(playerForm)) {
+      playerForm[pid] = lastFiveBatting(playerForm[pid]);
+    }
+
     return NextResponse.json({
       ...team,
       players: playersWithHistory,
       stats: { totalMatches, wins, losses },
+      form: { results: teamForm, players: playerForm },
     });
   } catch (error) {
     console.error('Error fetching team:', error);
@@ -124,6 +178,9 @@ export async function PUT(
             data: {
               ...(p.name !== undefined && { name: p.name }),
               ...(p.jerseyNumber !== undefined && { jerseyNumber: p.jerseyNumber }),
+              ...(p.battingHand === 'R' || p.battingHand === 'L' || p.battingHand === null
+                ? { battingHand: p.battingHand }
+                : {}),
             },
           });
         }
@@ -137,6 +194,7 @@ export async function PUT(
             name: p.name.trim(),
             teamId: id,
             jerseyNumber: p.jerseyNumber || null,
+            ...(p.battingHand === 'L' ? { battingHand: 'L' } : {}),
           },
         });
       }

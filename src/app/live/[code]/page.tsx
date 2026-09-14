@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { RefreshCw, AlertTriangle, Radio, Copy, Check } from 'lucide-react';
 import { LogoMark } from '@/components/brand/Logo';
 import { formatOvers, calculateCRR, calculateRRR, formatStrikeRate, formatEconomy, formatBowlingFigures } from '@/lib/scoring-utils';
+import { WpLineChart, TurningPointsList } from '@/components/analytics';
 import type { MatchData, InningsState, BallRecord } from '@/types';
 
 /* ─── v2 §12.3 — Target Adjusted Banner ─── */
@@ -39,6 +40,53 @@ function TargetAdjustedBanner({
         {banner.reason ? <span className="text-t3"> — {banner.reason}</span> : null}
       </span>
     </motion.div>
+  );
+}
+
+/* ─── v2 §13.1/§13.9 — Win Probability line + "Catch me up" digest ─── */
+
+function WinProbabilityPanel({
+  match,
+  currentInnings,
+  liveWp,
+}: {
+  match: MatchData;
+  currentInnings: InningsState;
+  liveWp: number | null;
+}) {
+  return (
+    <div className="relative">
+      <WpLineChart match={match} innings={currentInnings} compact />
+      {liveWp != null && (
+        <span className="absolute top-1.5 right-2.5 flex items-center gap-1 text-[10px] font-mono font-bold text-t1">
+          <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+          {Math.round(liveWp * 100)}%
+        </span>
+      )}
+    </div>
+  );
+}
+
+function CatchMeUp({ match, currentInnings }: { match: MatchData; currentInnings: InningsState }) {
+  const [open, setOpen] = useState(false);
+  const balls = (currentInnings.balls ?? []).filter((b) => b.deletedAt == null);
+  return (
+    <div className="rounded-xl bg-bg-card border border-border overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-2.5"
+        aria-expanded={open}
+      >
+        <span className="text-[10px] text-t3 uppercase tracking-wider font-medium">Catch me up</span>
+        <span className="text-[9px] text-t3">the moments that swung the match</span>
+        <span className="ml-auto text-t3 text-xs">{open ? '−' : '+'}</span>
+      </button>
+      {open && (
+        <div className="px-2 pb-2">
+          <TurningPointsList match={match} balls={balls} compact limit={5} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -344,6 +392,8 @@ export default function SpectatorPage() {
   const [copied, setCopied] = useState(false);
   // v2 §12.3 — target-adjusted banner state
   const [targetBanner, setTargetBanner] = useState<{ newTarget: number; method: string; reason: string; at: number } | null>(null);
+  // v2 §13.1 — instant WP from the per-ball SSE broadcast
+  const [liveWp, setLiveWp] = useState<number | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Fetch initial match data
@@ -400,8 +450,17 @@ export default function SpectatorPage() {
         const event = JSON.parse(e.data);
         setLastUpdate(new Date());
 
-        // For ball/wicket/over_complete events, re-fetch full match data
-        if (['ball', 'wicket', 'over_complete', 'innings_break', 'match_complete', 'match_abandoned', 'status_change', 'undo', 'redo', 'ball_edited', 'target_adjusted'].includes(event.type)) {
+        // v2 §13.1 — per-ball `wp` broadcast (instant, before the refetch)
+        if ((event.type === 'ball' || event.type === 'wicket') && typeof event.data?.wp === 'number') {
+          setLiveWp(event.data.wp as number);
+        }
+
+        // For ball/wicket/over_complete events, re-fetch full match data —
+        // except metadata-only edits (wagon/pitch capture, §13.2/§13.3)
+        if (
+          ['ball', 'wicket', 'over_complete', 'innings_break', 'match_complete', 'match_abandoned', 'status_change', 'undo', 'redo', 'ball_edited', 'target_adjusted'].includes(event.type) &&
+          !event.data?.metaOnly
+        ) {
           fetchMatch();
         }
         // v2 §12.3 — "Target adjusted: 87 (DLS)" banner
@@ -561,6 +620,16 @@ export default function SpectatorPage() {
             {/* Current partnership */}
             <div className="mt-2">
               <SpectatorPartnership currentInnings={currentInnings} />
+            </div>
+
+            {/* v2 §13.1 — win probability live line */}
+            <div className="mt-2">
+              <WinProbabilityPanel match={match} currentInnings={currentInnings} liveWp={liveWp} />
+            </div>
+
+            {/* v2 §13.9 — "Catch me up" turning-points digest */}
+            <div className="mt-2">
+              <CatchMeUp match={match} currentInnings={currentInnings} />
             </div>
           </>
         ) : isCompleted || isAbandoned ? (

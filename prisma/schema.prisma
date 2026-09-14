@@ -29,6 +29,8 @@ model Player {
   name         String
   teamId       String
   jerseyNumber Int?
+  // v2 §13.2 — wagon wheel mirroring ('R' right-hand, 'L' left-hand)
+  battingHand  String? @default("R")
   createdAt    DateTime @default(now())
 
   team           Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
@@ -64,6 +66,8 @@ model Match {
   adjustments    String?
   // v2 §12.3/§19.4 — SHA-256 of the organizer PIN (null = no PIN set)
   organizerPinHash String?
+  // v2 §13.10 — cached AI match report JSON { title, subtitle, sections, generator, generatedAt }
+  reportJson       String?
 
   team1      Team        @relation("MatchTeam1", fields: [team1Id], references: [id])
   team2      Team        @relation("MatchTeam2", fields: [team2Id], references: [id])
@@ -157,8 +161,15 @@ model Ball {
   version          Int         @default(1)
   // v2 §12.7 — idempotency key for offline replay (invariant 16)
   clientEventId    String?     @unique
-  // v2 §12.5/§13/§14 — JSON text: { penaltySide?, reason?, wagonDirection?, pitchMap? }
+  // v2 §12.5 — JSON text: { penaltySide?, reason? }
   meta             String?
+  // v2 §13.2 — wagon wheel sector (V | MID_WICKET | SQUARE_LEG | FINE_LEG |
+  // THIRD_MAN | POINT | COVER | MID_OFF) — captured post-boundary, 1 tap
+  wagonDirection   String?
+  // v2 §13.3 — pitch map capture (yorker/full/good/short/bouncer)
+  pitchLength      String?
+  // v2 §13.3 — pitch map capture (wide-off/off/stumps/middle/leg)
+  pitchLine        String?
 
   innings  Innings @relation(fields: [inningsId], references: [id], onDelete: Cascade)
   batsman  Player  @relation("BallBatsman", fields: [batsmanId], references: [id])

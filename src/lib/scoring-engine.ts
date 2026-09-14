@@ -24,6 +24,7 @@
 import { db } from '@/lib/db';
 import type { RecordBallInput, RecordBallResponse, WicketType, ExtraType } from '@/types';
 import { calculateCRR, calculateRRR } from './scoring-utils';
+import { winProbability } from './intelligence';
 import {
   fold,
   validateNext,
@@ -130,6 +131,18 @@ function buildResponse(ballRow: unknown, state: InningsState, rules: MatchRules,
     loaded.inningsNumber === 2 && loaded.target != null
       ? rules.totalOvers * rules.ballsPerOver - state.legalBalls
       : null;
+  // v2 §13.1 — win probability for the batting team, broadcast per ball.
+  const wp = state.legalBalls > 0 || state.runs > 0
+    ? Math.round(
+        winProbability(state, {
+          inningsNumber: rules.inningsNumber,
+          totalOvers: rules.totalOvers,
+          maxWickets: rules.maxWickets,
+          target: rules.target,
+          ballsPerOver: rules.ballsPerOver,
+        }) * 10000,
+      ) / 10000
+    : null;
   return {
     ball: ballRow as RecordBallResponse['ball'],
     inningsState: {
@@ -146,6 +159,7 @@ function buildResponse(ballRow: unknown, state: InningsState, rules: MatchRules,
       ballsRemaining,
       isCompleted: state.inningsComplete,
       isOverComplete: state.lastEffects?.isOverComplete ?? false,
+      winProbability: wp,
     },
     strikerUpdate: {
       strikerId: state.strikerId ?? '',

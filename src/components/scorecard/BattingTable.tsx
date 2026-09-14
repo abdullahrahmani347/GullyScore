@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import type { BatsmanInningsData, WicketType } from '@/types';
 
 interface BattingTableProps {
@@ -114,16 +115,24 @@ function BattingTable({
                 >
                   <td className="py-2 px-3">
                     <div className="flex flex-col">
-                      <span
-                        className={`font-medium ${
-                          b.isOut ? 'text-t2' : 'text-t1 font-semibold'
-                        }`}
+                      <Link
+                        href={`/players/${b.player.id}`}
+                        className="font-medium hover:underline"
+                        aria-label={`Career page for ${b.player.name}`}
                       >
-                        {b.player.name}
-                        {!b.isOut && (
-                          <span className="text-accent text-[10px] ml-0.5">*</span>
-                        )}
-                      </span>
+                        <span
+                          className={
+                            b.isOut
+                              ? 'text-t2'
+                              : 'text-t1 font-semibold'
+                          }
+                        >
+                          {b.player.name}
+                          {!b.isOut && (
+                            <span className="text-accent text-[10px] ml-0.5">*</span>
+                          )}
+                        </span>
+                      </Link>
                       <span className="text-t3 text-[10px] leading-tight">
                         {dismissal}
                       </span>

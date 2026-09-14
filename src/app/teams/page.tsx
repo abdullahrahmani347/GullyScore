@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { TeamCard } from '@/components/teams/TeamCard';
 import { TeamForm } from '@/components/teams/TeamForm';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
 import type { Team } from '@/types';
@@ -154,6 +154,9 @@ export default function TeamsPage() {
         <SheetContent side="bottom" className="bg-bg-app border-border rounded-t-2xl max-h-[90vh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="text-t1">Create Team</SheetTitle>
+            <SheetDescription className="text-t3 text-xs">
+              Name the team, pick a colour and add players.
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
             <TeamForm onSubmit={handleCreateTeam} isLoading={isCreating} />

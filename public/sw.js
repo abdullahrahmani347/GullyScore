@@ -11,7 +11,7 @@
  * retry logic, and recovery UI.
  */
 
-var CACHE_VERSION = 'gullyscore-v3-deploy-fix';
+var CACHE_VERSION = 'gullyscore-v4-clone-fix';
 var STATIC_CACHE = CACHE_VERSION + '-static';
 var API_CACHE = CACHE_VERSION + '-api';
 
@@ -151,8 +151,12 @@ function cacheFirst(request) {
 
     return fetch(request).then(function(response) {
       if (response.ok) {
-        var cachePromise = caches.open(STATIC_CACHE).then(function(cache) {
-          cache.put(request, response.clone());
+        // Clone SYNCHRONOUSLY before the response is returned — the browser
+        // starts consuming the original body the moment respondWith resolves,
+        // and a clone() called later races with it ("body already used").
+        var resClone = response.clone();
+        caches.open(STATIC_CACHE).then(function(cache) {
+          cache.put(request, resClone);
         });
       }
       return response;
@@ -178,9 +182,10 @@ function cacheFirst(request) {
 function networkFirstNavigation(request) {
   return fetch(request).then(function(response) {
     if (response.ok) {
-      // Cache the fresh app shell for offline use later
+      // Cache the fresh app shell for offline use later (clone BEFORE return)
+      var resClone = response.clone();
       caches.open(STATIC_CACHE).then(function(cache) {
-        cache.put(request, response.clone());
+        cache.put(request, resClone);
       });
     }
     return response;
@@ -210,10 +215,11 @@ function networkFirstNavigation(request) {
 function networkFirstWithCache(request) {
   return fetch(request).then(function(response) {
     if (response.ok) {
-      // Cache successful responses
+      // Cache successful responses (clone BEFORE the body is consumed)
+      var resClone = response.clone();
       var cacheName = API_CACHE;
       caches.open(cacheName).then(function(cache) {
-        cache.put(request, response.clone());
+        cache.put(request, resClone);
       });
     }
     return response;

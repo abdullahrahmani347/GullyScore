@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Share2, MessageCircle, Home, Trophy } from 'lucide-react';
+import Link from 'next/link';
+import { Share2, MessageCircle, Home, Trophy, FileText, Sparkles } from 'lucide-react';
 import { formatOvers, calculateCRR, getManOfMatch } from '@/lib/scoring-utils';
 import { exportScorecardImage, generateWhatsAppSummary } from '@/lib/share';
+import { useFeatures } from '@/hooks/useFeatures';
 import { toast } from 'sonner';
 import type { MatchData } from '@/types';
 
@@ -18,6 +20,36 @@ export function MatchResultScreen({ match, onCompleteMatch }: MatchResultScreenP
   const router = useRouter();
   const [isSharing, setIsSharing] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [reportReady, setReportReady] = useState(false);
+  const { features } = useFeatures();
+  const reportToasted = useRef(false);
+  const aiReportOn = features?.aiReport ?? false;
+
+  // v2 §13.10 — poll for the async AI report; toast when it lands
+  useEffect(() => {
+    if (match.status !== 'COMPLETED' || !aiReportOn) return;
+    let tries = 0;
+    const timer = setInterval(async () => {
+      tries++;
+      try {
+        const res = await fetch(`/api/matches/${match.id}/report`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.generator === 'ai') {
+            setReportReady(true);
+            if (!reportToasted.current) {
+              reportToasted.current = true;
+              toast.success('AI match report is ready!', {
+                action: { label: 'Read', onClick: () => router.push(`/matches/${match.id}/report`) },
+              });
+            }
+          }
+        }
+      } catch {}
+      if (tries >= 12) clearInterval(timer);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [match.status, match.id, aiReportOn, router]);
 
   const inn1 = match.innings[0];
   const inn2 = match.innings[1];
@@ -174,6 +206,19 @@ export function MatchResultScreen({ match, onCompleteMatch }: MatchResultScreenP
             <span className="text-sm font-medium">WhatsApp</span>
           </motion.button>
         </div>
+
+        {/* v2 §13.10 — match report (AI when the flag is on, template always) */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
+          <Link
+            href={`/matches/${match.id}/report`}
+            className="flex items-center justify-center gap-2 w-full h-12 rounded-xl bg-accent-dim border border-accent/30 text-accent hover:bg-accent/20 transition-colors"
+          >
+            {reportReady || aiReportOn ? <Sparkles size={16} /> : <FileText size={16} />}
+            <span className="text-sm font-medium">
+              {reportReady ? 'AI Match Report — ready!' : 'Match Report'}
+            </span>
+          </Link>
+        </motion.div>
 
         {/* Back to home */}
         <motion.button

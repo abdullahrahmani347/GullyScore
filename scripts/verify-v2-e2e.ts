@@ -12,6 +12,7 @@
  * Run: bun scripts/verify-v2-e2e.ts
  */
 
+export {};
 const BASE = process.env.BASE_URL ?? 'http://localhost:3000';
 const DEVICE = 'e2e-v2-device';
 

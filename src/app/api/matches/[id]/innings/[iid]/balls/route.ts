@@ -98,13 +98,14 @@ export async function POST(
       await db.match.update({ where: { id }, data: updateData });
     }
 
-    // Emit SSE event for spectators
+    // Emit SSE event for spectators — v2 §13.1: `wp` broadcasts per ball
     const eventType = result.ball.isWicket ? 'wicket' : 'ball';
     emitLiveEvent(id, {
       type: eventType,
       data: {
         ball: result.ball,
         inningsState: result.inningsState,
+        wp: result.inningsState.winProbability ?? null,
         strikerUpdate: result.strikerUpdate,
         needsNewBatsman: result.needsNewBatsman,
         needsNewBowler: result.needsNewBowler,

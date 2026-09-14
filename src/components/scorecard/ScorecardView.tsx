@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Trophy, MessageCircle, ImageIcon } from 'lucide-react';
+import { Trophy, MessageCircle, ImageIcon, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BattingTable } from './BattingTable';
 import { BowlingTable } from './BowlingTable';
@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 
 import type { MatchData } from '@/types';
 import { matchRulesFor, foldInnings, powerplaySplit } from '@/lib/scoring-context';
+import { InsightsSection } from '@/components/analytics/InsightsSection';
 
 /**
  * v2 §12.2 — PP vs non-PP split strip. Derived from the same fold the
@@ -280,6 +281,9 @@ function ScorecardView({ match }: ScorecardViewProps) {
           {/* Partnerships */}
           <PartnershipsTable partnerships={activeInnings.partnerships || []} />
 
+          {/* v2 §13 — match insights (MVP, turning points, matchups, wagon, pitch) */}
+          <InsightsSection match={match} innings={activeInnings} />
+
           {/* Ball by ball toggle */}
           <button
             onClick={() => setShowBallByBall(!showBallByBall)}
@@ -313,6 +317,7 @@ function ScorecardView({ match }: ScorecardViewProps) {
             battingTeamPlayers={inn1.team?.players || []}
           />
           <PartnershipsTable partnerships={inn1.partnerships || []} />
+          <InsightsSection match={match} innings={inn1} />
           <button
             onClick={() => setShowBallByBall(!showBallByBall)}
             className="w-full text-xs text-t3 hover:text-t2 transition-colors py-2"
@@ -349,6 +354,15 @@ function ScorecardView({ match }: ScorecardViewProps) {
         >
           <MessageCircle size={16} className="mr-2" />
           Copy WhatsApp Summary
+        </Button>
+        {/* v2 §13.10 — the shareable match-report article */}
+        <Button
+          onClick={() => (window.location.href = `/matches/${match.id}/report`)}
+          variant="ghost"
+          className="w-full h-11 rounded-xl border border-accent/25 text-accent hover:bg-accent/10"
+        >
+          <FileText size={16} className="mr-2" />
+          Match Report
         </Button>
       </div>
     </div>

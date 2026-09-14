@@ -75,6 +75,7 @@ export async function offlineFetch<T = any>(
 
   // If online, try the network request normally
   if (isOnline()) {
+    let serverRejected = false; // true = the SERVER answered (4xx/5xx)
     try {
       // Add device ID header for data isolation — use canonical getDeviceId()
       const headers = new Headers(fetchOptions.headers);
@@ -94,14 +95,21 @@ export async function offlineFetch<T = any>(
         return { data, offline: false };
       }
 
-      // Server error — throw
+      // The server ANSWERED with an error. 503 + our SW's offline JSON means
+      // the network was genuinely unreachable — anything else (400/401/403/
+      // 409/422…) is a real rejection that MUST surface to the UI; queueing
+      // and replaying it would loop forever and hide the error.
       const errorBody = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      if (response.status !== 503) serverRejected = true;
       throw new Error(errorBody.error || `HTTP ${response.status}`);
     } catch (error) {
-      // Network error even though we thought we were online
-      // This can happen with flaky connections
+      if (serverRejected) {
+        // Real server error — never queue, always surface.
+        throw error;
+      }
+      // Network-level failure while nominally online (flaky connection) —
+      // fall through to the offline queue below for mutations.
       if (isMutation && queueIfOffline) {
-        // Fall through to offline queueing
         console.warn(`[GullyScore] Network error on ${method} ${url}, falling back to offline queue`);
       } else {
         throw error;
@@ -109,8 +117,10 @@ export async function offlineFetch<T = any>(
     }
   }
 
-  // Offline path: queue the mutation (client-only)
-  if (!isOnline() && isMutation && queueIfOffline) {
+  // Offline path (or network-failed-while-online): queue the mutation.
+  // The old code required !isOnline() here, so a flaky-while-online failure
+  // logged "falling back to offline queue" and then never queued.
+  if (isMutation && queueIfOffline) {
     const body = typeof fetchOptions.body === 'string' ? fetchOptions.body : JSON.stringify(fetchOptions.body);
 
     // Dynamic import to avoid evaluating db.ts on the server

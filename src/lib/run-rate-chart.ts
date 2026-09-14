@@ -18,7 +18,7 @@ export interface OverRunData {
  * Also includes the current (in-progress) over as an unfilled bar.
  */
 export function computeRunsPerOver(innings: InningsState): OverRunData[] {
-  const balls = innings.balls;
+  const balls = innings.balls ?? [];
   if (balls.length === 0) return [];
 
   const overs: OverRunData[] = [];
@@ -35,7 +35,7 @@ export function computeRunsPerOver(innings: InningsState): OverRunData[] {
   }
 
   // Current in-progress over
-  if (innings.currentBalls > 0 || balls.some((b) => b.overNumber === innings.completedOvers)) {
+  if ((innings.currentBalls ?? 0) > 0 || balls.some((b) => b.overNumber === innings.completedOvers)) {
     const currentOverBalls = balls.filter((b) => b.overNumber === innings.completedOvers);
     const runs = currentOverBalls.reduce((acc, b) => acc + b.runs + b.extraRuns, 0);
     overs.push({

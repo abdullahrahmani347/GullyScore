@@ -23,7 +23,7 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { name, jerseyNumber } = body;
+    const { name, jerseyNumber, battingHand } = body;
 
     if (!name) {
       return NextResponse.json({ error: 'Player name is required' }, { status: 400 });
@@ -34,6 +34,8 @@ export async function POST(
         name,
         teamId: id,
         jerseyNumber: jerseyNumber || null,
+        // v2 §13.2 — wagon wheel mirroring ('R' default, 'L' mirrors)
+        ...(battingHand === 'L' ? { battingHand: 'L' } : {}),
       },
     });
 

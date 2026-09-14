@@ -27,6 +27,7 @@ import { TeamForm } from '@/components/teams/TeamForm';
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -43,6 +44,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { safeDeviceFetcher, deviceFetch } from '@/lib/device';
+import { FormChips, TeamFormStrip } from '@/components/analytics/FormChips';
+import type { FormInning, TeamFormResult } from '@/lib/intelligence';
+import Link from 'next/link';
 
 // --- Types ---
 
@@ -51,6 +55,10 @@ interface Player {
   name: string;
   jerseyNumber: number | null;
   hasMatchHistory: boolean;
+  /** v2 §13.2 — 'R' | 'L' (display badge) */
+  battingHand?: string | null;
+  /** v2 §13.7 — last-5 batting innings (form chips) */
+  form?: FormInning[];
 }
 
 interface TeamDetail {
@@ -66,6 +74,8 @@ interface TeamDetail {
     wins: number;
     losses: number;
   };
+  /** v2 §13.7 — W/Q form strip + per-player chips */
+  form?: { results: TeamFormResult[]; players: Record<string, FormInning[]> };
 }
 
 // --- Fetcher ---
@@ -208,7 +218,27 @@ function PlayerRow({
       />
       <span className="text-sm font-medium text-t1 flex-1 min-w-0 truncate">
         {player.name}
+        {player.battingHand === 'L' && (
+          <span className="ml-1.5 px-1 py-0.5 rounded bg-bg-elevated text-[8px] font-mono text-t3" title="Left-hand batter">
+            LH
+          </span>
+        )}
       </span>
+
+      {/* v2 §13.7 — last-5 batting form chips (tap a chip → player page) */}
+      {player.form && player.form.length > 0 && (
+        <FormChips innings={player.form} playerId={player.id} max={5} />
+      )}
+
+      {player.hasMatchHistory && (
+        <Link
+          href={`/players/${player.id}`}
+          className="text-[10px] text-accent/80 hover:text-accent px-2 py-1 rounded-lg border border-accent/20 hover:border-accent/40 transition-colors flex-shrink-0"
+          aria-label={`Career page for ${player.name}`}
+        >
+          Career
+        </Link>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -631,8 +661,8 @@ export default function TeamDetailPage() {
           />
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-4 mt-4">
+        {/* Stats + v2 §13.7 form strip */}
+        <div className="flex gap-4 mt-4 flex-wrap items-center">
           <div className="flex items-center gap-1.5 text-t2">
             <ClipboardList size={14} />
             <span className="text-sm">{team.stats.totalMatches} matches</span>
@@ -645,6 +675,12 @@ export default function TeamDetailPage() {
             <Trophy size={14} />
             <span className="text-sm">{team.stats.losses} lost</span>
           </div>
+          {team.form && team.form.results.length > 0 && (
+            <div className="flex items-center gap-1.5 ml-auto">
+              <span className="text-[9px] text-t3 uppercase tracking-wider">Form</span>
+              <TeamFormStrip results={team.form.results} />
+            </div>
+          )}
         </div>
       </div>
 
@@ -674,7 +710,7 @@ export default function TeamDetailPage() {
               {team.players.map((player, i) => (
                 <PlayerRow
                   key={player.id}
-                  player={player}
+                  player={{ ...player, form: team.form?.players?.[player.id] ?? [] }}
                   index={i}
                   teamColor={team.color}
                   onEdit={(id) => setEditingPlayerId(id)}
@@ -801,6 +837,9 @@ export default function TeamDetailPage() {
         >
           <SheetHeader>
             <SheetTitle className="text-t1">Edit Team</SheetTitle>
+            <SheetDescription className="text-t3 text-xs">
+              Update the team details, colours and player roster.
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-4">
             <TeamForm

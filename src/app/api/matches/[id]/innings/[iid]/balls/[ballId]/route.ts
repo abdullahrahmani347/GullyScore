@@ -5,6 +5,33 @@ import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { verifyPin } from '@/lib/organizer';
 import { db } from '@/lib/db';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
+import { WAGON_DIRECTIONS, PITCH_LENGTHS, PITCH_LINES } from '@/lib/intelligence';
+
+/** v2 §13.2/§13.3 — valid capture values for the metadata-only patch path. */
+function validMeta(
+  body: Record<string, unknown>,
+): { wagonDirection?: string | null; pitchLength?: string | null; pitchLine?: string | null } | { error: string } {
+  const out: { wagonDirection?: string | null; pitchLength?: string | null; pitchLine?: string | null } = {};
+  if (body.wagonDirection !== undefined) {
+    if (body.wagonDirection !== null && !WAGON_DIRECTIONS.includes(body.wagonDirection as never)) {
+      return { error: `wagonDirection must be one of ${WAGON_DIRECTIONS.join(', ')}` };
+    }
+    out.wagonDirection = body.wagonDirection as string | null;
+  }
+  if (body.pitchLength !== undefined) {
+    if (body.pitchLength !== null && !PITCH_LENGTHS.includes(body.pitchLength as never)) {
+      return { error: `pitchLength must be one of ${PITCH_LENGTHS.join(', ')}` };
+    }
+    out.pitchLength = body.pitchLength as string | null;
+  }
+  if (body.pitchLine !== undefined) {
+    if (body.pitchLine !== null && !PITCH_LINES.includes(body.pitchLine as never)) {
+      return { error: `pitchLine must be one of ${PITCH_LINES.join(', ')}` };
+    }
+    out.pitchLine = body.pitchLine as string | null;
+  }
+  return out;
+}
 
 /**
  * v2 §12.7 — BALL EDITOR.
@@ -40,6 +67,42 @@ export async function PATCH(
 
     const body = await request.json();
     const { runs, extraRuns, extraType, isWicket, wicketType, dismissedPlayerId, fielderPlayerId, reason, pin } = body;
+
+    // --- v2 §13.2/§13.3 — METADATA-ONLY PATH (wagon / pitch capture) -------
+    // A patch that carries ONLY wagon/pitch fields never touches scoring:
+    // no replay validation, no recalculate, no MatchEditLog, no PIN — it
+    // cannot change the result of a match. Version still bumps (audit).
+    const hasScoringFields =
+      runs !== undefined || extraRuns !== undefined || extraType !== undefined ||
+      isWicket !== undefined || wicketType !== undefined ||
+      dismissedPlayerId !== undefined || fielderPlayerId !== undefined || reason !== undefined;
+    const metaBody = validMeta(body);
+    if ('error' in metaBody) {
+      return NextResponse.json({ error: metaBody.error, code: 'VALIDATION' }, { status: 422 });
+    }
+    if (!hasScoringFields && (metaBody.wagonDirection !== undefined || metaBody.pitchLength !== undefined || metaBody.pitchLine !== undefined)) {
+      if (!['LIVE', 'INNINGS_BREAK', 'COMPLETED'].includes(match.status)) {
+        return NextResponse.json(
+          { error: 'Capture is only available during or after a live match.', code: 'INVALID_STATUS' },
+          { status: 409 }
+        );
+      }
+      const ball = await db.ball.findFirst({ where: { id: ballId, inningsId: iid } });
+      if (!ball) {
+        return NextResponse.json({ error: 'Ball not found in this innings.' }, { status: 404 });
+      }
+      const updated = await db.ball.update({
+        where: { id: ballId },
+        data: { ...metaBody, version: { increment: 1 } },
+      });
+      // Light SSE ping so any open wagon/pitch views can refresh — full
+      // scorecards pick the columns up on their next fetch.
+      emitLiveEvent(id, {
+        type: 'ball_edited',
+        data: { ballId, version: updated.version, metaOnly: true, ...metaBody },
+      });
+      return NextResponse.json({ success: true, ballId, version: updated.version, metaOnly: true });
+    }
 
     // --- Guard rails ---------------------------------------------------------
     const completed = match.status === 'COMPLETED';

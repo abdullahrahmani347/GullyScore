@@ -5,6 +5,7 @@ import { useMatchStore } from '@/store/matchStore';
 import { formatOvers, calculateCRR, calculateRRR } from '@/lib/scoring-utils';
 import { computeProjection, computeRRRDanger } from '@/lib/intelligence';
 import { freeHitPending, powerplayContext } from '@/lib/scoring-context';
+import { WPMeter } from '@/components/analytics/WPMeter';
 import type { MatchData, InningsState } from '@/types';
 
 interface ScoreDisplayProps {
@@ -149,6 +150,9 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
         <span className="text-xs text-t2">
           CRR: <span className="text-t1 font-mono font-medium">{crr.toFixed(2)}</span>
         </span>
+
+        {/* §13.1 — win probability meter (same fold as the server) */}
+        <WPMeter match={match} currentInnings={currentInnings} />
 
         {/* PAR PROJECTION chip (1st innings) */}
         {isFirstInnings && projection && (

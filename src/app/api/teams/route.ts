@@ -56,9 +56,11 @@ export async function POST(request: NextRequest) {
         emoji: emoji || '🏏',
         deviceId,
         players: {
-          create: (players || []).map((p: { name: string; jerseyNumber?: number }) => ({
+          create: (players || []).map((p: { name: string; jerseyNumber?: number; battingHand?: string }) => ({
             name: p.name,
             jerseyNumber: p.jerseyNumber,
+            // v2 §13.2 — wagon wheel mirroring
+            ...(p.battingHand === 'L' ? { battingHand: 'L' } : {}),
           })),
         },
       },

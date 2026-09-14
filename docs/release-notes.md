@@ -138,3 +138,84 @@ bun scripts/verify-v2-e2e.ts          # 45 live-server assertions
 # Browser AC: tap NB → FH pill appears; tap 4 → FH pill disappears;
 # WicketModal disables Bowled/Caught with "Free hit — not out" hint.
 ```
+
+---
+
+## v2 §13 — Analytics & Intelligence (2026-09-14)
+
+### Computed-value changes
+
+- **NONE for existing aggregates.** All §13 analytics are new, additive
+  computations over the same ball log; the engine fold() is untouched.
+  Golden v1-parity fixtures remain the gate (49 tests green).
+- Scorecard response gained fields: `rules`, `team1Id`/`team2Id`,
+  innings `teamId`, batting `playerId`, bowling `playerId` + `maidens`.
+  Previously the scorecard shape starved §13 consumers (MVP NaN, "?"
+  names, wrong bowling team) — read-only enrichment, no value changes.
+
+### What shipped
+
+- **§13.1 win probability** — `winProbability()` in `lib/intelligence.ts`
+  (chase: sigmoid(1.8·margin + 2.2·(WH−0.5)) clamped [0.02, 0.98];
+  1st innings: 50% ± wickets/pace heuristic). Broadcast as `wp` in every
+  SSE ball event; WPMeter on the scoring screen (client fold — instant);
+  live line + instant badge on the spectator page.
+- **§13.9 turning points** — `wpTimeline()` + `detectTurningPoints()`
+  (|ΔWP| > 15% per over), feeding the scorecard insights, the live
+  "Catch me up" digest and the report prompt.
+- **§13.2 wagon wheel** — 8-sector compass, `Ball.wagonDirection` via a
+  metadata-only PATCH path (no revalidation — cannot change scoring);
+  post-boundary 1-tap capture sheet with "don't ask again"; polar SVG with
+  left-hander mirroring (`Player.battingHand`).
+- **§13.3 pitch map** — `Ball.pitchLength`/`Ball.pitchLine` (2-tap capture
+  when house rules enable it); per-bowler 5×5 heatmap + length/line bars.
+- **§13.4 matchup matrix** — runs/balls/dots/dismissals per batter ×
+  bowler from Ball rows (wides not balls faced; no-balls are — §12.11).
+- **§13.5 MVP index** — exact spec formula, weights in `STAT_WEIGHTS`
+  (economy penalty only ≥ 2 overs). Match card + leaderboard, season
+  leaderboard on tournament pages (inputs summed across completed
+  matches, one index per player).
+- **§13.6 player career pages** — `/players/[id]` + `/api/players/[id]`:
+  career batting/bowling aggregates, milestones, run worm, matchups,
+  recent innings, form chips. Public read via `?code=GS-XXXX`.
+- **§13.7 form guides** — last-5 innings chips (not-out asterisk) on team
+  and player pages; W/L/T/Q team strip.
+- **§13.8 partnership analytics** — per-wicket stand graph, biggest/
+  fastest (≥30 runs), averages, run-rate per stand.
+- **§13.10 AI match report** — `POST /api/matches/:id/report` (flag
+  `aiReport`, default OFF) builds a structured prompt from the folded
+  scorecard + turning points via z-ai-web-dev-sdk, caches on
+  `Match.reportJson`, served by GET with the template
+  (`match-story.ts`) as the always-available fallback; the report page
+  labels the generator; completion triggers generation fire-and-forget
+  and the result screen polls + toasts when it lands.
+
+### Bug fixes from the field (user-reported console errors)
+
+1. **sw.js "Response body is already used"** — `response.clone()` now
+   runs synchronously before the response is returned to the browser in
+   all three cache strategies; cache version bumped to purge stale caches.
+2. **"Missing Description" dialog warnings** — added SheetDescription/
+   DialogDescription to Create-Team, Edit-Team and Live-Share overlays.
+3. **Innings-complete 400 + bogus offline queueing** — the complete route
+   is now idempotent (200 + current state on double-complete), and
+   `offlineFetch` only queues genuine network failures: real server
+   4xx/5xx responses surface to the UI instead of being replayed
+   forever. Also fixed: flaky-while-online mutations now actually queue
+   (previously logged "falling back" then threw).
+4. **"e is not iterable" crash** — raw Prisma innings rows (from
+   innings-create / offline stubs) lack the batting/bowling/balls
+   arrays; `matchStore.setCurrentInnings/refreshInningsData` now
+   normalize every innings (plus a rehydrate merge), and the v1
+   intelligence consumers guard their inputs.
+
+### How to verify
+
+```bash
+bun test                              # 178 tests (49 golden + 66 v2 + 16 DLS + 47 §13)
+bun scripts/verify-v13-e2e.ts         # 47 live-server assertions (§13)
+bun scripts/verify-v2-e2e.ts          # 45 §12 regression assertions
+# Browser: score a boundary → "Where did it go?" 1-tap compass → toast
+# "Cover — 4 runs"; WP meter on the score header; scorecard → Match
+# insights (MVP, matchups, wagon, pitch map); /players/[id] career page.
+```
