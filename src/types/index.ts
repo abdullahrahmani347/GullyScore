@@ -1,5 +1,13 @@
-export type WicketType = 'BOWLED' | 'CAUGHT' | 'RUN_OUT' | 'LBW' | 'STUMPED' | 'HIT_WICKET' | 'RETIRED_HURT';
-export type ExtraType = 'WIDE' | 'NO_BALL' | 'BYE' | 'LEG_BYE';
+export type WicketType =
+  | 'BOWLED'
+  | 'CAUGHT'
+  | 'RUN_OUT'
+  | 'LBW'
+  | 'STUMPED'
+  | 'HIT_WICKET'
+  | 'RETIRED_HURT'
+  | 'OBSTRUCTING_FIELD';
+export type ExtraType = 'WIDE' | 'NO_BALL' | 'BYE' | 'LEG_BYE' | 'PENALTY';
 export type MatchStatus = 'UPCOMING' | 'TOSS' | 'LIVE' | 'INNINGS_BREAK' | 'COMPLETED' | 'ABANDONED';
 export type TossDecision = 'BAT' | 'FIELD';
 export type TournamentFormat = 'ROUND_ROBIN' | 'KNOCKOUT';
@@ -107,6 +115,13 @@ export interface BallRecord {
   isLegalDelivery: boolean;
   strikerIdBefore: string;
   nonStrikerIdBefore: string;
+  // v2 §12.1/§12.5/§12.7
+  causedFreeHit?: boolean;
+  isFreeHit?: boolean;
+  deletedAt?: string | null;
+  version?: number;
+  clientEventId?: string | null;
+  meta?: string | null;
 }
 
 export interface MatchData {
@@ -128,7 +143,37 @@ export interface MatchData {
   liveCode?: string | null;
   createdAt: string;
   completedAt?: string | null;
+  // v2 §12.10/§12.3 — house rules JSON + overs-adjustment audit log (JSON strings)
+  rules?: string | null;
+  adjustments?: string | null;
   innings: InningsState[];
+}
+
+/** v2 §12.10 — parsed house rules for the UI. */
+export interface HouseRules {
+  freeHitOnNoBall: boolean;
+  ballsPerOver: number;
+  powerplayOvers: number | 'auto';
+  lastManStands: boolean;
+  wideLimitAdditional: number;
+  wagonCapture: 'off' | 'boundaries' | 'all';
+  pitchMapCapture: boolean;
+  guestPlayersAllowed: number;
+  retiredHurtNotOut: boolean;
+  strikeRotationV2: boolean;
+}
+
+/** v2 §12.3 — one Match.adjustments log entry. */
+export interface MatchAdjustment {
+  at: string;
+  innings: 1 | 2;
+  from: number;
+  to: number;
+  oversUsed: number;
+  wickets: number;
+  reason: string;
+  method: 'dls' | 'approx' | 'manual';
+  newTarget?: number | null;
 }
 
 export interface RecordBallInput {
@@ -141,6 +186,10 @@ export interface RecordBallInput {
   fielderPlayerId?: string | null;
   extraType?: ExtraType | null;
   extraRuns: number;
+  // v2 §12.5/§12.7
+  clientEventId?: string | null;
+  penaltySide?: 'batting' | 'bowling' | null;
+  reason?: string | null;
 }
 
 export interface RecordBallResponse {

@@ -14,7 +14,18 @@ const liveEmitter = new EventEmitter();
 liveEmitter.setMaxListeners(200); // Allow many concurrent SSE connections
 
 export interface LiveMatchEvent {
-  type: 'ball' | 'wicket' | 'over_complete' | 'innings_break' | 'match_complete' | 'match_abandoned' | 'status_change';
+  type:
+    | 'ball'
+    | 'wicket'
+    | 'over_complete'
+    | 'innings_break'
+    | 'match_complete'
+    | 'match_abandoned'
+    | 'status_change'
+    | 'undo' // v2 §12.7 tombstone undo
+    | 'redo' // v2 §12.7 redo
+    | 'ball_edited' // v2 §12.7 ball editor
+    | 'target_adjusted'; // v2 §12.3 DLS banner
   matchId: string;
   data: Record<string, unknown>;
   timestamp: number;

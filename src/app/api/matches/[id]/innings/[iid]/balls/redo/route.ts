@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { undoLastBall } from '@/lib/scoring-engine';
+import { redoLastBall } from '@/lib/scoring-engine';
 import { emitLiveEvent } from '@/lib/live-emitter';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 /**
- * v2 §12.7 — UNDO = soft-delete (tombstone) the last live event, then
- * recompute every aggregate via fold(). Works offline the same way (the
- * offline queue replays the DELETE; tombstone syncs later). Broadcasts the
- * recomputed state over SSE.
+ * v2 §12.7 — REDO: un-tombstone the most recent tombstone. Only possible
+ * when the tombstone is the tail of the event log (once a newer live event
+ * exists, redo is refused — the scorer would need to edit instead).
  */
-export async function DELETE(
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; iid: string }> }
 ) {
@@ -29,13 +28,13 @@ export async function DELETE(
       return ownership;
     }
 
-    const result = await undoLastBall(iid);
+    const result = await redoLastBall(iid);
 
     if (result.success) {
       const innings = await db.innings.findUnique({ where: { id: iid } });
       if (innings) {
         emitLiveEvent(id, {
-          type: 'undo',
+          type: 'redo',
           data: {
             inningsState: {
               runs: innings.runs,
@@ -50,7 +49,7 @@ export async function DELETE(
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Error undoing last ball:', error);
-    return NextResponse.json({ error: 'Failed to undo last ball' }, { status: 500 });
+    console.error('Error redoing ball:', error);
+    return NextResponse.json({ error: 'Failed to redo ball' }, { status: 500 });
   }
 }

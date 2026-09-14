@@ -15,6 +15,7 @@
  */
 
 import { db } from '@/lib/db';
+import { parseMatchRules } from './engine';
 
 // ─── Incremental Update ─────────────────────────────────────────
 
@@ -158,6 +159,7 @@ export async function rebuildPartnerships(inningsId: string): Promise<void> {
   const innings = await db.innings.findUniqueOrThrow({
     where: { id: inningsId },
     include: {
+      match: true,
       balls: { orderBy: { deliveryNumber: 'asc' } },
     },
   });
@@ -165,8 +167,21 @@ export async function rebuildPartnerships(inningsId: string): Promise<void> {
   // Delete existing partnerships
   await db.partnership.deleteMany({ where: { inningsId } });
 
-  const balls = innings.balls;
+  // v2 §12.7: tombstoned (undone) events are gone; §12.5 PENALTY events are
+  // not deliveries — they contribute no partnership runs or balls.
+  const balls = innings.balls.filter(
+    (b) => b.deletedAt == null && b.extraType !== 'PENALTY'
+  );
   if (balls.length === 0) return;
+
+  // v2 §12.4: under retiredHurtNotOut a retirement closes the stand but is
+  // not a wicket — the stand's wicketNumber stays 0 (matches fold()).
+  const rules = parseMatchRules(innings.match.rules, {
+    maxWickets: innings.match.maxWickets,
+    totalOvers: innings.match.totalOvers,
+    inningsNumber: innings.inningsNumber,
+    target: innings.target,
+  });
 
   const pairKey = (a: string, b: string): [string, string] => a < b ? [a, b] : [b, a];
 
@@ -222,7 +237,8 @@ export async function rebuildPartnerships(inningsId: string): Promise<void> {
 
     // Wicket ends the partnership
     if (ball.isWicket) {
-      wicketNumber++;
+      const isRetirement = ball.wicketType === 'RETIRED_HURT' && rules.retiredHurtNotOut;
+      if (!isRetirement) wicketNumber++;
 
       await db.partnership.create({
         data: {

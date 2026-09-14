@@ -45,6 +45,8 @@ export async function GET(
       return ownership;
     }
 
+    // v2 §12.3 — the PIN hash never leaves the server
+    delete (match as { organizerPinHash?: string }).organizerPinHash;
     return NextResponse.json(match);
   } catch (error) {
     console.error('Error fetching match:', error);
@@ -60,7 +62,7 @@ export async function PATCH(
     await ensureDbSchema();
     const { id } = await params;
     const body = await request.json();
-    const { status, tossWinnerId, tossDecision, currentInnings, result, winnerId } = body;
+    const { status, tossWinnerId, tossDecision, currentInnings, result, winnerId, rules, organizerPin } = body;
 
     // Check ownership first
     const existingMatch = await db.match.findUnique({ where: { id } });
@@ -128,6 +130,29 @@ export async function PATCH(
       }
     }
 
+    // v2 §12.10 — house rules may be edited until play starts (TOSS or earlier).
+    let rulesUpdate: string | undefined;
+    if (rules != null && typeof rules === 'object') {
+      if (!['UPCOMING', 'TOSS'].includes(existingMatch.status)) {
+        return NextResponse.json(
+          { error: 'House rules can only be changed before play starts.' },
+          { status: 409 }
+        );
+      }
+      const { v2HouseRules } = await import('@/lib/engine');
+      rulesUpdate = JSON.stringify(v2HouseRules(rules as Record<string, unknown>));
+    }
+
+    // v2 §12.3/§19.4 — set/change/clear the organizer PIN (SHA-256 stored).
+    let organizerPinHashUpdate: string | null | undefined;
+    if (organizerPin !== undefined) {
+      if (typeof organizerPin !== 'string' || (organizerPin.trim() !== '' && organizerPin.trim().length < 4)) {
+        return NextResponse.json({ error: 'Organizer PIN must be at least 4 characters (or empty to clear).' }, { status: 400 });
+      }
+      const { hashPin } = await import('@/lib/organizer');
+      organizerPinHashUpdate = organizerPin.trim() === '' ? null : hashPin(organizerPin);
+    }
+
     const match = await db.match.update({
       where: { id },
       data: {
@@ -137,6 +162,8 @@ export async function PATCH(
         ...(currentInnings !== undefined && { currentInnings }),
         ...(result !== undefined && { result }),
         ...(winnerId !== undefined && { winnerId }),
+        ...(rulesUpdate !== undefined && { rules: rulesUpdate }),
+        ...(organizerPinHashUpdate !== undefined && { organizerPinHash: organizerPinHashUpdate }),
         ...(liveCode && { liveCode }),
       },
       include: {

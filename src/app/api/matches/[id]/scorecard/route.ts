@@ -106,6 +106,16 @@ export async function GET(
           noBalls: inn.noBalls,
           byes: inn.byes,
           legByes: inn.legByes,
+          // v2 §12.5 — penalty runs to the batting side (extras breakdown "pen" row)
+          penalties: inn.balls
+            .filter((b) => b.extraType === 'PENALTY' && b.deletedAt == null)
+            .reduce((acc, b) => {
+              let side = 'batting';
+              try {
+                side = b.meta != null ? (JSON.parse(b.meta).penaltySide ?? 'batting') : 'batting';
+              } catch {}
+              return acc + (side === 'batting' ? b.extraRuns : 0);
+            }, 0),
           total: inn.wideBalls + inn.noBalls + inn.byes + inn.legByes,
         },
         partnerships: inn.partnerships.map((p) => ({

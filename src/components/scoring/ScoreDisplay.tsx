@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useMatchStore } from '@/store/matchStore';
 import { formatOvers, calculateCRR, calculateRRR } from '@/lib/scoring-utils';
 import { computeProjection, computeRRRDanger } from '@/lib/intelligence';
+import { freeHitPending, powerplayContext } from '@/lib/scoring-context';
 import type { MatchData, InningsState } from '@/types';
 
 interface ScoreDisplayProps {
@@ -13,6 +14,10 @@ interface ScoreDisplayProps {
 
 export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
   const lastBallResult = useMatchStore((s) => s.lastBallResult);
+
+  // v2 §12.1/§12.2 — free-hit pill + powerplay badge (same fold as the server)
+  const freeHit = freeHitPending(currentInnings, match);
+  const pp = powerplayContext(currentInnings, match);
 
   const runs = lastBallResult?.inningsState?.runs ?? currentInnings.runs;
   const wickets = lastBallResult?.inningsState?.wickets ?? currentInnings.wickets;
@@ -106,6 +111,37 @@ export function ScoreDisplay({ match, currentInnings }: ScoreDisplayProps) {
         <span className="font-mono text-lg text-t3">
           ({formatOvers(completedOvers, currentBalls)} ov)
         </span>
+
+        {/* §12.1 — FREE HIT pill (amber) beside the over counter */}
+        <AnimatePresence>
+          {freeHit && (
+            <motion.span
+              key="fh-pill"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-1 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/40 uppercase tracking-wider"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              Free Hit
+            </motion.span>
+          )}
+        </AnimatePresence>
+
+        {/* §12.2 — powerplay badge (gold) while the phase is active */}
+        <AnimatePresence>
+          {pp?.active && (
+            <motion.span
+              key="pp-badge"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              className="inline-flex items-center text-[10px] font-mono font-bold px-2 py-1 rounded-full bg-gold/15 text-gold border border-gold/35 uppercase tracking-wider"
+            >
+              PP {Math.min(pp.ppOvers, completedOvers + 1)}/{pp.ppOvers}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Run rates + Intelligence chips */}

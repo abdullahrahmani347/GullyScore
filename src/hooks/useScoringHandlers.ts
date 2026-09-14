@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useMatchStore } from '@/store/matchStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { toast } from 'sonner';
@@ -8,13 +8,15 @@ import { isOffline } from '@/lib/offline/fetch';
 import {
   recordBallOffline,
   undoBallOffline,
+  redoBallOffline,
   setStrikerOffline,
   setBowlerOffline,
   completeInningsOffline,
   completeMatchOffline,
   createInningsOffline,
 } from '@/lib/offline/fetch';
-import type { ExtraType, WicketType } from '@/types';
+import { predictAfterBall, newClientEventId, parseHouseRules, freeHitPending } from '@/lib/scoring-context';
+import type { ExtraType, WicketType, BallRecord } from '@/types';
 
 interface UseScoringHandlersProps {
   matchId: string;
@@ -52,10 +54,22 @@ function getBallSummary(data: {
   return `${data.runs} run${data.runs !== 1 ? 's' : ''}`;
 }
 
+/** Small label helper for penalty toasts. */
+function pentingSideLabel(side: 'batting' | 'bowling'): string {
+  return side === 'batting' ? 'batting side' : 'bowling side';
+}
+
 export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps) {
-  const handleScore = useCallback(async (runs: number, extraType?: ExtraType, extraRuns?: number) => {
+  // v2 §12.7 — redo appears after an undo (tail-of-log tombstone)
+  const [redoAvailable, setRedoAvailable] = useState(false);
+
+  /**
+   * v2 §12.7 — every ball event carries a clientEventId (idempotency key):
+   * replayed offline-queue items are deduped server-side, never double-counted.
+   */
+  const handleScore = useCallback(async (runs: number, extraType?: ExtraType, extraRuns?: number, opts?: { clientEventId?: string }) => {
     const store = useMatchStore.getState();
-    if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings) return;
+    if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -67,47 +81,76 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       isWicket: false,
       extraType: extraType ?? null,
       extraRuns: extraRuns ?? 0,
+      clientEventId: opts?.clientEventId ?? newClientEventId(),
     };
 
     const summary = getBallSummary(ballData);
 
-    // Optimistic update: immediately update the UI with expected runs
+    // v2 §12.7 — optimistic update computed by the SAME engine the server
+    // runs (fold over balls + proposed): the predicted post-ball state is
+    // exactly what the server will return, including v2 strike rotation.
     const optimisticInnings = { ...store.currentInnings };
-    const totalRuns = runs + (extraRuns ?? 0);
     const isWide = extraType === 'WIDE';
     const isNoBall = extraType === 'NO_BALL';
-    const isLegalDelivery = !isWide && !isNoBall;
-    const currentLegalBalls = optimisticInnings.currentBalls;
-    const newBallInOver = isLegalDelivery ? currentLegalBalls + 1 : 0;
-    const isOverComplete = isLegalDelivery && newBallInOver === 6;
-    const newCurrentBalls = isOverComplete ? 0 : (isLegalDelivery ? currentLegalBalls + 1 : currentLegalBalls);
-    const newCompletedOvers = optimisticInnings.completedOvers + (isOverComplete ? 1 : 0);
+    const isPenalty = extraType === 'PENALTY';
+    const isLegalDelivery = !isWide && !isNoBall && !isPenalty;
+    const predicted = predictAfterBall(store.currentInnings, store.match, {
+      deliveryNumber: (store.currentInnings.balls?.length ?? 0) + 1,
+      batsmanId: store.strikerId,
+      bowlerId: store.currentBowlerId,
+      runs,
+      extraRuns: extraRuns ?? 0,
+      extraType: extraType ?? null,
+      isWicket: false,
+      wicketType: null,
+      dismissedPlayerId: null,
+      fielderPlayerId: null,
+      strikerIdBefore: store.strikerId,
+      nonStrikerIdBefore: store.nonStrikerId,
+    });
+    const isOverComplete = predicted.completedOvers > (optimisticInnings.completedOvers ?? 0);
 
-    // Calculate optimistic striker change
-    let newStrikerId: string | null = store.strikerId;
-    let newNonStrikerId: string | null = store.nonStrikerId;
-    if (isLegalDelivery) {
-      if (runs % 2 === 1) {
-        [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
-      }
-      if (isOverComplete && runs % 2 === 0) {
-        [newStrikerId, newNonStrikerId] = [newNonStrikerId, newStrikerId];
-      }
-    }
+    // v2 — the optimistic update also appends the ball event to the list so
+    // the OverStrip / FH pill / bowler-split chips react instantly (the
+    // server remains the authority; mutate() reconciles).
+    const fhBefore = store.match ? freeHitPending(store.currentInnings, store.match) : false;
+    const optimisticBall: BallRecord = {
+      id: `optimistic-${ballData.clientEventId}`,
+      inningsId: optimisticInnings.id,
+      overNumber: optimisticInnings.completedOvers ?? 0,
+      ballInOver: isPenalty ? 0 : predicted.currentBalls,
+      deliveryNumber: (optimisticInnings.balls?.length ?? 0) + 1,
+      batsmanId: store.strikerId,
+      bowlerId: store.currentBowlerId,
+      runs,
+      extraRuns: extraRuns ?? 0,
+      extraType: extraType ?? null,
+      isWicket: false,
+      wicketType: null,
+      dismissedPlayerId: null,
+      fielderPlayerId: null,
+      isLegalDelivery: isLegalDelivery,
+      strikerIdBefore: store.strikerId,
+      nonStrikerIdBefore: store.nonStrikerId,
+      causedFreeHit: isNoBall,
+      isFreeHit: fhBefore,
+    } as unknown as BallRecord;
 
-    // Apply optimistic update to store
+    // Apply optimistic update to store (predicted aggregates = server truth)
     store.setCurrentInnings({
       ...optimisticInnings,
-      runs: optimisticInnings.runs + totalRuns,
-      completedOvers: newCompletedOvers,
-      currentBalls: newCurrentBalls,
-      wideBalls: optimisticInnings.wideBalls + (isWide ? 1 : 0),
-      noBalls: optimisticInnings.noBalls + (isNoBall ? 1 : 0),
-      byes: optimisticInnings.byes + (extraType === 'BYE' ? (extraRuns ?? 0) : 0),
-      legByes: optimisticInnings.legByes + (extraType === 'LEG_BYE' ? (extraRuns ?? 0) : 0),
+      runs: predicted.runs,
+      wickets: predicted.wickets,
+      completedOvers: predicted.completedOvers,
+      currentBalls: predicted.currentBalls,
+      wideBalls: predicted.wideBalls,
+      noBalls: predicted.noBalls,
+      byes: predicted.byes,
+      legByes: predicted.legByes,
+      balls: [...(optimisticInnings.balls ?? []), optimisticBall],
     });
-    if (newStrikerId && newNonStrikerId) {
-      store.setStrike(newStrikerId, newNonStrikerId);
+    if (predicted.strikerId && predicted.nonStrikerId) {
+      store.setStrike(predicted.strikerId, predicted.nonStrikerId);
     }
 
     try {
@@ -119,17 +162,13 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       );
 
       if (offline) {
-        // Ball was recorded offline — keep optimistic state
         toast.info(`${summary} — saved offline`, { duration: 2000 });
-
-        // Determine next state optimistically
         if (isOverComplete) {
           store.setState('OVER_COMPLETE');
         } else {
           store.setState('SCORING');
         }
       } else {
-        // Online success — use server response
         if (result.error) {
           throw new Error(result.error);
         }
@@ -146,19 +185,27 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
         else store.setState('SCORING');
       }
-    } catch {
+    } catch (err) {
       // Rollback: re-fetch actual data from server
       await mutate();
       store.setState('SCORING');
-      toast.error('Failed to record ball — please try again');
+      const message = err instanceof Error ? err.message : 'Failed to record ball — please try again';
+      toast.error(message, { duration: 4000 });
     } finally {
       store.setSubmitting(false);
     }
   }, [matchId, mutate]);
 
-  const handleWicket = useCallback(async (wicketData: { wicketType: WicketType; dismissedPlayerId: string; fielderPlayerId?: string }) => {
+  const handleWicket = useCallback(async (wicketData: {
+    wicketType: WicketType;
+    dismissedPlayerId: string;
+    fielderPlayerId?: string;
+    runs?: number;
+    extraType?: ExtraType | null;
+    extraRuns?: number;
+  }) => {
     const store = useMatchStore.getState();
-    if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings) return;
+    if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -166,35 +213,58 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     const ballData = {
       batsmanId: store.strikerId,
       bowlerId: store.currentBowlerId,
-      runs: 0,
+      runs: wicketData.runs ?? 0,
       isWicket: true,
       wicketType: wicketData.wicketType,
       dismissedPlayerId: wicketData.dismissedPlayerId,
       fielderPlayerId: wicketData.fielderPlayerId ?? null,
-      extraType: null,
-      extraRuns: 0,
+      extraType: wicketData.extraType ?? null,
+      extraRuns: wicketData.extraRuns ?? 0,
+      clientEventId: newClientEventId(),
     };
 
     const summary = getBallSummary(ballData);
 
-    // Optimistic: update wickets count, over state, and batting list immediately
+    // v2 §12.7 — optimistic update via the engine fold (same as server)
     const optimisticInnings = { ...store.currentInnings };
-    const isLegalDelivery = true; // Wickets are always on legal deliveries
-    const currentLegalBalls = optimisticInnings.currentBalls;
-    const newBallInOver = currentLegalBalls + 1;
-    const isOverComplete = newBallInOver === 6;
-    const newCurrentBalls = isOverComplete ? 0 : newBallInOver;
-    const newCompletedOvers = optimisticInnings.completedOvers + (isOverComplete ? 1 : 0);
+    const predicted = predictAfterBall(store.currentInnings, store.match, {
+      deliveryNumber: (store.currentInnings.balls?.length ?? 0) + 1,
+      batsmanId: store.strikerId,
+      bowlerId: store.currentBowlerId,
+      runs: wicketData.runs ?? 0,
+      extraRuns: wicketData.extraRuns ?? 0,
+      extraType: wicketData.extraType ?? null,
+      isWicket: true,
+      wicketType: wicketData.wicketType,
+      dismissedPlayerId: wicketData.dismissedPlayerId,
+      fielderPlayerId: wicketData.fielderPlayerId ?? null,
+      strikerIdBefore: store.strikerId,
+      nonStrikerIdBefore: store.nonStrikerId,
+    });
+    const isOverComplete = predicted.completedOvers > (optimisticInnings.completedOvers ?? 0);
 
-    // Optimistic striker change for wicket: dismissed player leaves, non-striker stays
-    let newStrikerId = store.nonStrikerId; // The surviving batsman becomes striker
-    let newNonStrikerId = ''; // New batsman to be selected
-
-    // If the dismissed player was the non-striker (run out), striker stays
-    if (wicketData.dismissedPlayerId === store.nonStrikerId) {
-      newStrikerId = store.strikerId;
-      newNonStrikerId = '';
-    }
+    // v2 — append the optimistic ball event (OverStrip/FH pill react instantly)
+    const fhBeforeW = store.match ? freeHitPending(store.currentInnings, store.match) : false;
+    const optimisticWicketBall: BallRecord = {
+      id: `optimistic-${ballData.clientEventId}`,
+      inningsId: optimisticInnings.id,
+      overNumber: optimisticInnings.completedOvers ?? 0,
+      ballInOver: predicted.currentBalls,
+      deliveryNumber: (optimisticInnings.balls?.length ?? 0) + 1,
+      batsmanId: store.strikerId,
+      bowlerId: store.currentBowlerId,
+      runs: wicketData.runs ?? 0,
+      extraRuns: wicketData.extraRuns ?? 0,
+      extraType: wicketData.extraType ?? null,
+      isWicket: true,
+      wicketType: wicketData.wicketType,
+      dismissedPlayerId: wicketData.dismissedPlayerId,
+      fielderPlayerId: wicketData.fielderPlayerId ?? null,
+      isLegalDelivery: wicketData.extraType == null || wicketData.extraType === 'BYE' || wicketData.extraType === 'LEG_BYE',
+      strikerIdBefore: store.strikerId,
+      nonStrikerIdBefore: store.nonStrikerId,
+      isFreeHit: fhBeforeW,
+    } as unknown as BallRecord;
 
     // Optimistically mark the dismissed batsman as out in the batting list
     const updatedBatting = optimisticInnings.batting.map((b) => {
@@ -206,12 +276,14 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
     store.setCurrentInnings({
       ...optimisticInnings,
-      wickets: optimisticInnings.wickets + 1,
-      completedOvers: newCompletedOvers,
-      currentBalls: newCurrentBalls,
+      runs: predicted.runs,
+      wickets: predicted.wickets,
+      completedOvers: predicted.completedOvers,
+      currentBalls: predicted.currentBalls,
       batting: updatedBatting,
+      balls: [...(optimisticInnings.balls ?? []), optimisticWicketBall],
     });
-    store.setStrike(newStrikerId || '', newNonStrikerId);
+    store.setStrike(predicted.strikerId || '', predicted.nonStrikerId || '');
 
     try {
       const { data: result, offline } = await recordBallOffline(
@@ -222,34 +294,30 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       );
 
       if (offline) {
-        // Wicket recorded offline — keep optimistic state
         toast.info(`WICKET — saved offline`, { duration: 2000 });
 
-        // Store a synthetic lastBallResult so the new batsman flow
-        // knows whether the over was also complete
         store.setLastBallResult({
-          ball: ballData as any,
+          ball: ballData as unknown as BallRecord,
           inningsState: {
-            runs: optimisticInnings.runs,
-            wickets: optimisticInnings.wickets + 1,
-            completedOvers: newCompletedOvers,
-            currentBalls: newCurrentBalls,
+            runs: predicted.runs,
+            wickets: predicted.wickets,
+            completedOvers: predicted.completedOvers,
+            currentBalls: predicted.currentBalls,
             currentRunRate: 0,
             requiredRunRate: null,
             runsNeeded: null,
             ballsRemaining: null,
-            isCompleted: false,
+            isCompleted: predicted.inningsComplete,
             isOverComplete,
           },
-          strikerUpdate: { strikerId: newStrikerId || '', nonStrikerId: '' },
-          needsNewBatsman: true,
+          strikerUpdate: { strikerId: predicted.strikerId || '', nonStrikerId: predicted.nonStrikerId || '' },
+          needsNewBatsman: predicted.lastEffects?.needsNewBatsman ?? true,
           needsNewBowler: isOverComplete,
-          needsInningsBreak: false,
-          isMatchComplete: false,
+          needsInningsBreak: predicted.lastEffects?.needsInningsBreak ?? false,
+          isMatchComplete: predicted.lastEffects?.isMatchComplete ?? false,
         });
         store.setState('NEW_BATSMAN');
       } else {
-        // Online success — use server response
         if (result.error) {
           throw new Error(result.error);
         }
@@ -266,11 +334,71 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         else if (result.needsNewBowler) store.setState('OVER_COMPLETE');
         else store.setState('SCORING');
       }
-    } catch {
-      // Rollback: re-fetch actual data
+    } catch (err) {
       await mutate();
       store.setState('SCORING');
-      toast.error('Failed to record wicket — please try again');
+      const message = err instanceof Error ? err.message : 'Failed to record wicket — please try again';
+      toast.error(message, { duration: 4000 });
+    } finally {
+      store.setSubmitting(false);
+    }
+  }, [matchId, mutate]);
+
+  /**
+   * v2 §12.5 — PENALTY runs. Logged as a Ball row with extraType PENALTY:
+   * team extras only, consumes no ball, no batter or bowler charged.
+   */
+  const handlePenalty = useCallback(async (penaltySide: 'batting' | 'bowling', runs: number, reason: string) => {
+    const store = useMatchStore.getState();
+    if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
+
+    store.setState('PROCESSING');
+    store.setSubmitting(true);
+
+    const ballData = {
+      batsmanId: store.strikerId,
+      bowlerId: store.currentBowlerId,
+      runs: 0,
+      isWicket: false,
+      extraType: 'PENALTY' as ExtraType,
+      extraRuns: runs,
+      penaltySide,
+      reason,
+      clientEventId: newClientEventId(),
+    };
+
+    try {
+      const { data: result, offline } = await recordBallOffline(
+        matchId,
+        store.currentInnings.id,
+        ballData,
+        `PENALTY +${runs} (${penaltySide})`
+      );
+
+      if (offline) {
+        toast.info(`Penalty +${runs} — saved offline`, { duration: 2000 });
+        // Optimistic: batting-side penalty raises the total
+        if (penaltySide === 'batting') {
+          store.setCurrentInnings({
+            ...store.currentInnings,
+            runs: store.currentInnings.runs + runs,
+          });
+        }
+        store.setState('SCORING');
+      } else {
+        if (result.error) {
+          throw new Error(result.error);
+        }
+        store.setLastBallResult(result);
+        await mutate();
+        store.setState('SCORING');
+        toast.success(`Penalty +${runs} to the ${pentingSideLabel(penaltySide)}${reason ? ` — ${reason}` : ''}`, { duration: 2500 });
+      }
+    } catch (err) {
+      await mutate();
+      store.setState('SCORING');
+      const message = err instanceof Error ? err.message : 'Failed to record penalty';
+      toast.error(message, { duration: 4000 });
     } finally {
       store.setSubmitting(false);
     }
@@ -294,6 +422,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         toast.info('Undo — saved offline', { duration: 2000 });
         store.setLastBallResult(null);
         store.setState('SCORING');
+        setRedoAvailable(true);
       } else {
         if (!result.success) {
           toast.error('Nothing to undo');
@@ -302,10 +431,40 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         await mutate();
         store.setLastBallResult(null);
         store.setState('SCORING');
+        setRedoAvailable(true); // §12.7 — the tombstone is the log tail
         toast.success('Last ball undone');
       }
     } catch {
       toast.error('Failed to undo — please try again');
+    } finally {
+      store.setSubmitting(false);
+    }
+  }, [matchId, mutate]);
+
+  /** v2 §12.7 — redo the last undone event (un-tombstones the log tail). */
+  const handleRedo = useCallback(async () => {
+    const store = useMatchStore.getState();
+    if (store.isSubmitting || !store.currentInnings) return;
+
+    store.setSubmitting(true);
+    try {
+      const { data: result, offline } = await redoBallOffline(matchId, store.currentInnings.id);
+
+      if (offline) {
+        toast.info('Redo — saved offline', { duration: 2000 });
+      } else {
+        if (!result.success) {
+          toast.error('Nothing to redo');
+          setRedoAvailable(false);
+          return;
+        }
+        await mutate();
+        toast.success('Ball restored');
+      }
+      setRedoAvailable(false);
+      store.setState('SCORING');
+    } catch {
+      toast.error('Failed to redo — please try again');
     } finally {
       store.setSubmitting(false);
     }
@@ -412,7 +571,10 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
   return {
     handleScore,
     handleWicket,
+    handlePenalty,
     handleUndo,
+    handleRedo,
+    redoAvailable,
     handleSetStriker,
     handleSetBowler,
     handleCompleteInnings,

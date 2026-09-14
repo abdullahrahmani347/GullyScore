@@ -46,6 +46,8 @@ export async function GET(
       );
     }
 
+    // v2 §12.3 — the PIN hash never leaves the server
+    delete (match as { organizerPinHash?: string }).organizerPinHash;
     return NextResponse.json(match);
   } catch (error) {
     console.error('Error resolving live code:', error);

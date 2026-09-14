@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
       ...(limit ? { take: limit } : {}),
     });
 
+    // v2 §12.3 — the PIN hash never leaves the server
+    for (const m of matches) delete (m as { organizerPinHash?: string }).organizerPinHash;
     return NextResponse.json(matches);
   } catch (error) {
     console.error('Error fetching matches:', error);
@@ -96,6 +98,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // v2 §12.10 — per-match house rules (validated through the engine's
+    // allow-list; unknown keys are dropped server-side).
+    let rulesJson: string | null = null;
+    if (body.rules != null && typeof body.rules === 'object') {
+      const { v2HouseRules } = await import('@/lib/engine');
+      rulesJson = JSON.stringify(v2HouseRules(body.rules as Record<string, unknown>));
+    }
+
     const match = await db.match.create({
       data: {
         team1Id,
@@ -105,6 +115,7 @@ export async function POST(request: NextRequest) {
         venue: venue || null,
         tournamentId: tournamentId || null,
         deviceId,
+        rules: rulesJson,
       },
       include: {
         team1: { include: { players: true } },

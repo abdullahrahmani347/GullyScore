@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { MoreHorizontal, Redo2 } from 'lucide-react';
 import { useMatchStore } from '@/store/matchStore';
 
 interface ScoreButtonsProps {
@@ -8,6 +9,11 @@ interface ScoreButtonsProps {
   onExtras: () => void;
   onWicket: () => void;
   onUndo: () => void;
+  /** v2 §12.7 — redo appears after an undo */
+  onRedo?: () => void;
+  redoAvailable?: boolean;
+  /** v2 §12.5 — overflow menu (penalty + more) */
+  onMore: () => void;
 }
 
 const scoreButtons = [
@@ -19,7 +25,7 @@ const scoreButtons = [
   { runs: 6, label: '6', bg: 'bg-run-6/20 hover:bg-run-6/30', text: 'text-run-6' },
 ];
 
-export function ScoreButtons({ onScore, onExtras, onWicket, onUndo }: ScoreButtonsProps) {
+export function ScoreButtons({ onScore, onExtras, onWicket, onUndo, onRedo, redoAvailable, onMore }: ScoreButtonsProps) {
   const isSubmitting = useMatchStore((s) => s.isSubmitting);
   const currentState = useMatchStore((s) => s.currentState);
   const disabled = isSubmitting || currentState === 'PROCESSING';
@@ -46,8 +52,8 @@ export function ScoreButtons({ onScore, onExtras, onWicket, onUndo }: ScoreButto
         ))}
       </div>
 
-      {/* Bottom row: Extras + Wicket + Undo */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Bottom row: Extras + Wicket + Undo (+ Redo + More) */}
+      <div className={`grid gap-2 ${redoAvailable ? 'grid-cols-5' : 'grid-cols-4'}`}>
         {/* Extras */}
         <motion.button
           whileTap={disabled ? {} : { scale: 0.95 }}
@@ -91,6 +97,40 @@ export function ScoreButtons({ onScore, onExtras, onWicket, onUndo }: ScoreButto
           `}
         >
           Undo
+        </motion.button>
+
+        {/* Redo (§12.7) — appears after an undo */}
+        {redoAvailable && (
+          <motion.button
+            whileTap={disabled ? {} : { scale: 0.95 }}
+            onClick={() => !disabled && onRedo?.()}
+            disabled={disabled}
+            className={`
+              flex items-center justify-center h-12 rounded-xl
+              bg-accent/10 hover:bg-accent/20 text-accent border border-accent/25
+              transition-colors select-none
+              ${disabled ? 'opacity-50 pointer-events-none' : ''}
+            `}
+            title="Redo the undone ball"
+          >
+            <Redo2 size={16} />
+          </motion.button>
+        )}
+
+        {/* More (§12.5 penalty, §12.3 match settings) */}
+        <motion.button
+          whileTap={disabled ? {} : { scale: 0.95 }}
+          onClick={() => !disabled && onMore()}
+          disabled={disabled}
+          className={`
+            flex items-center justify-center h-12 rounded-xl
+            bg-bg-card hover:bg-bg-elevated text-t3 border border-border
+            transition-colors select-none
+            ${disabled ? 'opacity-50 pointer-events-none' : ''}
+          `}
+          title="Penalty, match settings"
+        >
+          <MoreHorizontal size={18} />
         </motion.button>
       </div>
     </div>

@@ -8,6 +8,40 @@ import { LogoMark } from '@/components/brand/Logo';
 import { formatOvers, calculateCRR, calculateRRR, formatStrikeRate, formatEconomy, formatBowlingFigures } from '@/lib/scoring-utils';
 import type { MatchData, InningsState, BallRecord } from '@/types';
 
+/* ─── v2 §12.3 — Target Adjusted Banner ─── */
+
+function TargetAdjustedBanner({
+  banner,
+  clear,
+}: {
+  banner: { newTarget: number; method: string; reason: string; at: number } | null;
+  clear: () => void;
+}) {
+  useEffect(() => {
+    if (!banner) return;
+    const t = setTimeout(clear, 30000); // keep the banner up for 30s
+    return () => clearTimeout(t);
+  }, [banner, clear]);
+
+  if (!banner) return null;
+  const methodLabel = banner.method === 'dls' ? 'DLS' : banner.method === 'approx' ? 'approx' : 'manual';
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className="flex items-center gap-2 mt-2 rounded-xl bg-gold/10 border border-gold/30 px-3 py-2"
+    >
+      <AlertTriangle size={14} className="text-gold shrink-0" />
+      <span className="text-xs text-t2">
+        Target adjusted: <span className="text-gold font-mono font-semibold">{banner.newTarget}</span>
+        <span className="text-t3"> ({methodLabel})</span>
+        {banner.reason ? <span className="text-t3"> — {banner.reason}</span> : null}
+      </span>
+    </motion.div>
+  );
+}
+
 /* ─── Spectator Score Card ─── */
 
 function SpectatorScoreDisplay({ match, currentInnings }: { match: MatchData; currentInnings: InningsState }) {
@@ -308,6 +342,8 @@ export default function SpectatorPage() {
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [copied, setCopied] = useState(false);
+  // v2 §12.3 — target-adjusted banner state
+  const [targetBanner, setTargetBanner] = useState<{ newTarget: number; method: string; reason: string; at: number } | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   // Fetch initial match data
@@ -365,8 +401,17 @@ export default function SpectatorPage() {
         setLastUpdate(new Date());
 
         // For ball/wicket/over_complete events, re-fetch full match data
-        if (['ball', 'wicket', 'over_complete', 'innings_break', 'match_complete', 'match_abandoned', 'status_change'].includes(event.type)) {
+        if (['ball', 'wicket', 'over_complete', 'innings_break', 'match_complete', 'match_abandoned', 'status_change', 'undo', 'redo', 'ball_edited', 'target_adjusted'].includes(event.type)) {
           fetchMatch();
+        }
+        // v2 §12.3 — "Target adjusted: 87 (DLS)" banner
+        if (event.type === 'target_adjusted' && event.data?.newTarget != null) {
+          setTargetBanner({
+            newTarget: event.data.newTarget as number,
+            method: (event.data.method as string) ?? 'dls',
+            reason: (event.data.reason as string) ?? '',
+            at: Date.now(),
+          });
         }
       } catch {}
     });
@@ -491,6 +536,9 @@ export default function SpectatorPage() {
           <>
             {/* Current innings score */}
             <SpectatorScoreDisplay match={match} currentInnings={currentInnings} />
+
+            {/* v2 §12.3 — "Target adjusted: 87 (DLS)" banner */}
+            <TargetAdjustedBanner banner={targetBanner} clear={() => setTargetBanner(null)} />
 
             {/* First innings summary (if 2nd innings) */}
             {currentInnings.inningsNumber === 2 && firstInnings && (

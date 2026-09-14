@@ -183,6 +183,22 @@ export async function undoBallOffline(
 }
 
 /**
+ * v2 §12.7 — Convenience method for redoing the last undone ball offline.
+ */
+export async function redoBallOffline(
+  matchId: string,
+  inningsId: string
+): Promise<{ data: any; offline: boolean; queuedItemId?: number }> {
+  return offlineFetch(`/api/matches/${matchId}/innings/${inningsId}/balls/redo`, {
+    method: 'POST',
+    description: 'Redo last ball',
+    matchId,
+    inningsId,
+    type: 'ball',
+  });
+}
+
+/**
  * Convenience method for setting striker offline.
  */
 export async function setStrikerOffline(

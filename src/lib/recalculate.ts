@@ -16,8 +16,29 @@
  */
 
 import { db } from '@/lib/db';
-import { fold, defaultRules } from './engine';
+import { fold, parseMatchRules } from './engine';
+import { hydrateEvents } from './scoring-engine';
 import { rebuildPartnerships } from './partnerships';
+
+/**
+ * Load the effective rules for an innings (v2 §12.10): Match.rules JSON over
+ * the v1-parity base. Legacy matches (rules null) fold with v1 semantics.
+ */
+export async function loadRules(inningsId: string) {
+  const innings = await db.innings.findUniqueOrThrow({
+    where: { id: inningsId },
+    include: { match: true },
+  });
+  return {
+    innings,
+    rules: parseMatchRules(innings.match.rules, {
+      maxWickets: innings.match.maxWickets,
+      totalOvers: innings.match.totalOvers,
+      inningsNumber: innings.inningsNumber,
+      target: innings.target,
+    }),
+  };
+}
 
 export async function recalculate(inningsId: string): Promise<void> {
   const innings = await db.innings.findUniqueOrThrow({
@@ -31,18 +52,15 @@ export async function recalculate(inningsId: string): Promise<void> {
   });
 
   // --- Derive everything from the event log (pure, no DB round-trips) -----
-  const rules = defaultRules({
+  // v2 §12.10: rules come from Match.rules (null = v1 parity). Tombstoned
+  // events are skipped by fold(); PENALTY events are accounted as extras.
+  const rules = parseMatchRules(innings.match.rules, {
     maxWickets: innings.match.maxWickets,
     totalOvers: innings.match.totalOvers,
     inningsNumber: innings.inningsNumber,
     target: innings.target,
-    // v1 parity: 6-ball overs, no free hits, no powerplays
-    ballsPerOver: 6,
-    freeHitOnNoBall: false,
-    powerplayOvers: 0,
-    lastManStands: false,
   });
-  const state = fold(innings.balls, rules);
+  const state = fold(hydrateEvents(innings.balls), rules);
 
   // --- Write innings counters ----------------------------------------------
   await db.innings.update({

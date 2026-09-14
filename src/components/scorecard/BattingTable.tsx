@@ -14,6 +14,8 @@ interface BattingTableProps {
     noBalls: number;
     byes: number;
     legByes: number;
+    /** v2 §12.5 — penalty runs credited to the batting side */
+    penalties?: number;
     total: number;
   };
   allPlayers: { id: string; name: string }[];
@@ -165,7 +167,8 @@ function BattingTable({
           {extras.noBalls > 0 && <span>Nb {extras.noBalls}</span>}
           {extras.byes > 0 && <span>B {extras.byes}</span>}
           {extras.legByes > 0 && <span>Lb {extras.legByes}</span>}
-          <span className="font-bold text-t1">{extras.total}</span>
+          {(extras.penalties ?? 0) > 0 && <span className="text-amber-400">pen {extras.penalties}</span>}
+          <span className="font-bold text-t1">{extras.total + (extras.penalties ?? 0)}</span>
         </div>
       </div>
 

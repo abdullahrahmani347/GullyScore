@@ -14,12 +14,53 @@ import { formatOvers } from '@/lib/scoring-utils';
 import { format } from 'date-fns';
 
 import type { MatchData } from '@/types';
+import { matchRulesFor, foldInnings, powerplaySplit } from '@/lib/scoring-context';
+
+/**
+ * v2 §12.2 — PP vs non-PP split strip. Derived from the same fold the
+ * server runs; the two buckets reconcile exactly with the innings totals.
+ */
+function PowerplaySplitStrip({ match, innings }: { match: MatchData; innings: MatchData['innings'][number] }) {
+  const rules = matchRulesFor(match, innings.inningsNumber, innings.target ?? null);
+  const state = foldInnings(innings, match);
+  const split = powerplaySplit(state, rules);
+  const rr = (balls: number, runs: number) => (balls > 0 ? ((runs * 6) / balls).toFixed(1) : '—');
+  if (rules.powerplayOvers <= 0) return null;
+  return (
+      <div className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[10px] font-mono font-bold text-gold uppercase tracking-wider">
+            Powerplay ({split.powerplayOvers} ov)
+          </span>
+          <span className="text-[9px] text-t3">vs the rest</span>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <p className="text-[9px] text-t3 uppercase tracking-wide">PP</p>
+            <p className="text-xs font-mono text-t1">
+              {split.powerplay.runs}/{split.powerplay.wickets}
+              <span className="text-t3"> · RR {rr(split.powerplay.legalBalls, split.powerplay.runs)} · {split.powerplay.boundaries}b</span>
+            </p>
+          </div>
+          <div>
+            <p className="text-[9px] text-t3 uppercase tracking-wide">Non-PP</p>
+            <p className="text-xs font-mono text-t1">
+              {split.nonPowerplay.runs}/{split.nonPowerplay.wickets}
+              <span className="text-t3"> · RR {rr(split.nonPowerplay.legalBalls, split.nonPowerplay.runs)} · {split.nonPowerplay.boundaries}b</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+}
 
 interface ScorecardInningsExtras {
   wides: number;
   noBalls: number;
   byes: number;
   legByes: number;
+  /** v2 §12.5 — penalty runs credited to the batting side */
+  penalties?: number;
   total: number;
 }
 
@@ -211,6 +252,9 @@ function ScorecardView({ match }: ScorecardViewProps) {
       {/* Innings detail */}
       {activeInnings && (
         <div className="px-4 space-y-3">
+          {/* v2 §12.2 — PP vs non-PP split summary */}
+          <PowerplaySplitStrip match={match} innings={activeInnings} />
+
           {/* Batting table */}
           <BattingTable
             batting={activeInnings.batting}
@@ -251,6 +295,7 @@ function ScorecardView({ match }: ScorecardViewProps) {
       {/* Only 1 innings */}
       {inn1 && !inn2 && (
         <div className="px-4 space-y-3">
+          <PowerplaySplitStrip match={match} innings={inn1} />
           <BattingTable
             batting={inn1.batting}
             teamName={inn1.team?.name || 'Batting'}

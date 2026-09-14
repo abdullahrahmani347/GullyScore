@@ -58,11 +58,18 @@ model Match {
   deviceId       String        @default("")
   createdAt      DateTime      @default(now())
   completedAt    DateTime?
+  // v2 §12.10 — per-match house rules, JSON text (null = v1 parity)
+  rules          String?
+  // v2 §12.3 — DLS/overs adjustments audit log, JSON array text
+  adjustments    String?
+  // v2 §12.3/§19.4 — SHA-256 of the organizer PIN (null = no PIN set)
+  organizerPinHash String?
 
   team1      Team        @relation("MatchTeam1", fields: [team1Id], references: [id])
   team2      Team        @relation("MatchTeam2", fields: [team2Id], references: [id])
   innings    Innings[]
   tournament Tournament? @relation(fields: [tournamentId], references: [id])
+  editLog    MatchEditLog[]
 }
 
 enum MatchStatus {
@@ -142,6 +149,16 @@ model Ball {
   strikerIdBefore  String
   nonStrikerIdBefore String
   timestamp        DateTime    @default(now())
+  // v2 §12.1 — free-hit state machine flags
+  causedFreeHit    Boolean     @default(false)
+  isFreeHit        Boolean     @default(false)
+  // v2 §12.7 — event sourcing: tombstone undo + optimistic-concurrency version
+  deletedAt        DateTime?
+  version          Int         @default(1)
+  // v2 §12.7 — idempotency key for offline replay (invariant 16)
+  clientEventId    String?     @unique
+  // v2 §12.5/§13/§14 — JSON text: { penaltySide?, reason?, wagonDirection?, pitchMap? }
+  meta             String?
 
   innings  Innings @relation(fields: [inningsId], references: [id], onDelete: Cascade)
   batsman  Player  @relation("BallBatsman", fields: [batsmanId], references: [id])
@@ -156,6 +173,7 @@ enum WicketType {
   STUMPED
   HIT_WICKET
   RETIRED_HURT
+  OBSTRUCTING_FIELD
 }
 
 enum ExtraType {
@@ -163,6 +181,20 @@ enum ExtraType {
   NO_BALL
   BYE
   LEG_BYE
+  PENALTY
+}
+
+/// v2 §12.7 — audit trail for ball edits (who/when/before/after).
+model MatchEditLog {
+  id        String   @id @default(cuid())
+  matchId   String
+  ballId    String?
+  editedAt  DateTime @default(now())
+  reason    String?
+  before    String?
+  after     String?
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
 }
 
 model BatsmanInnings {

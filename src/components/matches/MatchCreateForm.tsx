@@ -31,6 +31,11 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
   const [totalOvers, setTotalOvers] = useState('10');
   const [maxWickets, setMaxWickets] = useState('10');
   const [venue, setVenue] = useState('');
+  // v2 §12.10 — house rules (defaults per the spec table)
+  const [freeHitOnNoBall, setFreeHitOnNoBall] = useState(true);
+  const [ballsPerOver, setBallsPerOver] = useState<6 | 8>(6);
+  const [lastManStands, setLastManStands] = useState(false);
+  const [showHouseRules, setShowHouseRules] = useState(false);
 
   // Step 3: Toss
   const [tossWinnerId, setTossWinnerId] = useState('');
@@ -107,7 +112,7 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
     setIsSubmitting(true);
 
     try {
-      // 1. Create the match
+      // 1. Create the match (v2 §12.10: house rules ride along)
       const matchRes = await deviceFetch('/api/matches', {
         method: 'POST',
         body: JSON.stringify({
@@ -116,6 +121,11 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
           totalOvers: parseInt(totalOvers),
           maxWickets: parseInt(maxWickets),
           venue: venue.trim() || null,
+          rules: {
+            freeHitOnNoBall,
+            ballsPerOver,
+            lastManStands,
+          },
         }),
       });
 
@@ -296,6 +306,74 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
                 <span className="text-sm text-t2">Match</span>
                 <span className="text-sm text-t1 font-medium">{team1?.shortName} vs {team2?.shortName}</span>
               </div>
+            </div>
+
+            {/* v2 §12.10 — house rules sheet */}
+            <div className="rounded-xl border border-border bg-bg-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowHouseRules((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-3 hover:bg-bg-elevated/60 transition-colors"
+              >
+                <span className="text-sm text-t2">House rules</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono text-t3">
+                    {freeHitOnNoBall ? 'FH' : '—'} · {ballsPerOver}b{lastManStands ? ' · LMS' : ''}
+                  </span>
+                  {showHouseRules ? <ChevronLeft size={16} className="text-t3" /> : <ChevronRight size={16} className="text-t3" />}
+                </span>
+              </button>
+              {showHouseRules && (
+                <div className="px-3 pb-3 space-y-3 border-t border-border">
+                  {/* Free hit */}
+                  <label className="flex items-center justify-between py-1 cursor-pointer">
+                    <div>
+                      <span className="text-sm text-t1">Free hit on no-ball</span>
+                      <p className="text-[10px] text-t3">Next delivery after a no-ball can’t get you out except run out</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={freeHitOnNoBall}
+                      onChange={(e) => setFreeHitOnNoBall(e.target.checked)}
+                      className="w-10 h-6 appearance-none rounded-full bg-bg-elevated border border-border relative cursor-pointer transition-colors checked:bg-accent/60 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-t2 after:transition-transform checked:after:translate-x-4"
+                    />
+                  </label>
+                  {/* Balls per over */}
+                  <div>
+                    <span className="text-sm text-t1">Balls per over</span>
+                    <div className="grid grid-cols-2 gap-2 mt-1.5">
+                      {([6, 8] as const).map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setBallsPerOver(b)}
+                          className={`h-10 rounded-xl text-sm font-medium transition-colors ${
+                            ballsPerOver === b ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-bg-elevated text-t2 border border-border'
+                          }`}
+                        >
+                          {b} balls
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Last man stands */}
+                  <label className="flex items-center justify-between py-1 cursor-pointer">
+                    <div>
+                      <span className="text-sm text-t1">Last man stands</span>
+                      <p className="text-[10px] text-t3">Short side? The last batter bats on alone — no partner needed</p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={lastManStands}
+                      onChange={(e) => setLastManStands(e.target.checked)}
+                      className="w-10 h-6 appearance-none rounded-full bg-bg-elevated border border-border relative cursor-pointer transition-colors checked:bg-accent/60 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:rounded-full after:bg-t2 after:transition-transform checked:after:translate-x-4"
+                    />
+                  </label>
+                  <p className="text-[10px] text-t3">
+                    Powerplay: auto ({Math.max(1, Math.round((parseInt(totalOvers) || 10) * 0.3))} ov) · Retired hurt can return · penalties available during scoring
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -138,6 +138,24 @@ export function WicketHitWicketIcon(props: IconProps) {
   );
 }
 
+/** Obstructing the Field — batter blocks/blocks the path (v2 §12.6). */
+export function WicketObstructingFieldIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      {/* Stumps at right */}
+      <path d="M17 7v10M20 7v10M17 6.5h3" />
+      {/* Batter arm blocking the ball's path */}
+      <path d="M4 12h7" />
+      <path d="M11 12c2 0 2 3 0 3" />
+      {/* The blocked ball */}
+      <circle cx="6.5" cy="12" r="1.8" fill="currentColor" stroke="none" opacity="0.85" />
+      {/* Person silhouette hint */}
+      <circle cx="10" cy="7" r="1.5" opacity="0.7" />
+      <path d="M10 8.5v4" opacity="0.7" />
+    </svg>
+  );
+}
+
 /** Retired Hurt — batter walking off, injured. */
 export function WicketRetiredHurtIcon(props: IconProps) {
   return (
@@ -511,6 +529,7 @@ export const WICKET_TYPE_ICONS = {
   lbw: WicketLbwIcon,
   stumped: WicketStumpedIcon,
   hit_wicket: WicketHitWicketIcon,
+  obstructing_field: WicketObstructingFieldIcon,
   retired_hurt: WicketRetiredHurtIcon,
 } as const;
 
