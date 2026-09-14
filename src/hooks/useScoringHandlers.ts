@@ -69,7 +69,11 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
    */
   const handleScore = useCallback(async (runs: number, extraType?: ExtraType, extraRuns?: number, opts?: { clientEventId?: string }) => {
     const store = useMatchStore.getState();
+    // Cross-match guard: the persisted store can momentarily hold the PREVIOUS
+    // match's players while the new match is loading. Never write a ball with
+    // striker/bowler/innings IDs that don't belong to THIS match.
     if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
+    if (store.match.id !== matchId || store.currentInnings.matchId !== matchId) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -205,7 +209,11 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     extraRuns?: number;
   }) => {
     const store = useMatchStore.getState();
+    // Cross-match guard: the persisted store can momentarily hold the PREVIOUS
+    // match's players while the new match is loading. Never write a ball with
+    // striker/bowler/innings IDs that don't belong to THIS match.
     if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
+    if (store.match.id !== matchId || store.currentInnings.matchId !== matchId) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -350,7 +358,11 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
    */
   const handlePenalty = useCallback(async (penaltySide: 'batting' | 'bowling', runs: number, reason: string) => {
     const store = useMatchStore.getState();
+    // Cross-match guard: the persisted store can momentarily hold the PREVIOUS
+    // match's players while the new match is loading. Never write a ball with
+    // striker/bowler/innings IDs that don't belong to THIS match.
     if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
+    if (store.match.id !== matchId || store.currentInnings.matchId !== matchId) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -406,7 +418,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
   const handleUndo = useCallback(async () => {
     const store = useMatchStore.getState();
-    if (store.isSubmitting || !store.currentInnings) return;
+    if (store.isSubmitting || !store.currentInnings || store.currentInnings.matchId !== matchId) return;
 
     // If last ball was a wicket, confirm first
     if (store.lastBallResult?.ball?.isWicket && useSettingsStore.getState().confirmUndoWicket) {
@@ -444,7 +456,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
   /** v2 §12.7 — redo the last undone event (un-tombstones the log tail). */
   const handleRedo = useCallback(async () => {
     const store = useMatchStore.getState();
-    if (store.isSubmitting || !store.currentInnings) return;
+    if (store.isSubmitting || !store.currentInnings || store.currentInnings.matchId !== matchId) return;
 
     store.setSubmitting(true);
     try {
@@ -472,7 +484,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
   const handleSetStriker = useCallback(async (strikerId: string, nonStrikerId: string) => {
     const store = useMatchStore.getState();
-    if (!store.currentInnings) return;
+    if (!store.currentInnings || store.currentInnings.matchId !== matchId) return;
 
     // Optimistic
     store.setStrike(strikerId, nonStrikerId);
@@ -493,7 +505,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
   const handleSetBowler = useCallback(async (bowlerId: string) => {
     const store = useMatchStore.getState();
-    if (!store.currentInnings) return;
+    if (!store.currentInnings || store.currentInnings.matchId !== matchId) return;
 
     // Optimistic
     store.setBowler(bowlerId);
@@ -514,7 +526,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
 
   const handleCompleteInnings = useCallback(async () => {
     const store = useMatchStore.getState();
-    if (!store.currentInnings) return;
+    if (!store.currentInnings || store.currentInnings.matchId !== matchId) return;
 
     try {
       const { offline } = await completeInningsOffline(matchId, store.currentInnings.id);

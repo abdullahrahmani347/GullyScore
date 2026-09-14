@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useState, useEffect, useRef } from 'react';
+import { Component, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useParams, useRouter } from 'next/navigation';
 import { Ban, AlertTriangle, ArrowLeft, QrCode, WifiOff } from 'lucide-react';
@@ -24,6 +24,10 @@ import {
 import type { MatchData } from '@/types';
 
 const fetcher = deviceFetcher;
+
+// useLayoutEffect warns during SSR (client components are still server-rendered);
+// fall back to useEffect on the server — the effect is a client-side no-op there anyway.
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 /* ─── Error Boundary ─── */
 
@@ -202,6 +206,25 @@ export default function ScoringPage() {
   const initialized = useRef(false);
   const [liveShareOpen, setLiveShareOpen] = useState(false);
 
+  // ── Stale-store fix ──
+  // The match store is persisted (localStorage) for offline resilience, but it
+  // was never cleared when a DIFFERENT match was opened. The scorer then saw
+  // (and could write to) the PREVIOUS match's data while the new match loaded.
+  // Guard 1 (render): persisted store data is only a valid fallback if it
+  // belongs to THIS match (page refresh / offline reload of the same match).
+  const persistedMatch = store.match && store.match.id === matchId ? store.match : null;
+
+  // Guard 2 (pre-paint): if the store holds a different match — e.g. the user
+  // just started a new one — wipe it BEFORE the browser paints, so the old
+  // match can never flash and stale striker/bowler IDs can never be written.
+  useIsomorphicLayoutEffect(() => {
+    const st = useMatchStore.getState();
+    if (st.match && st.match.id !== matchId) {
+      st.reset();
+      initialized.current = false;
+    }
+  }, [matchId]);
+
   // Revalidate SWR data when coming back online
   const wasOfflineRef = useRef(false);
   useEffect(() => {
@@ -288,7 +311,7 @@ export default function ScoringPage() {
     };
   }, [matchId]);
 
-  if (isLoading && !store.match) {
+  if (isLoading && !persistedMatch) {
     return (
       <div className="min-h-dvh bg-bg-app flex items-center justify-center">
         <div className="text-center">
@@ -299,7 +322,7 @@ export default function ScoringPage() {
     );
   }
 
-  if (swrError && !store.match) {
+  if (swrError && !persistedMatch) {
     return (
       <div className="min-h-dvh bg-bg-app flex items-center justify-center p-4">
         <div className="rounded-xl border border-border bg-bg-card p-8 text-center max-w-sm w-full">
@@ -320,8 +343,8 @@ export default function ScoringPage() {
     );
   }
 
-  // If offline but have persisted store data, use it (don't block on network)
-  const matchData = match || store.match;
+  // If offline but have persisted store data for THIS match, use it (don't block on network)
+  const matchData = match || persistedMatch;
   if (!matchData) {
     return (
       <div className="min-h-dvh bg-bg-app flex items-center justify-center p-4">

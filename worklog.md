@@ -827,3 +827,24 @@ Stage Summary:
 - §13 fully delivered on the pure-intelligence doctrine: every number (WP, MVP, matchups, turning points, forms, partnerships, careers) computes from the same ball log through lib/intelligence.ts, running identically in the browser, API routes and the test suite
 - All four user-reported console errors fixed at their roots (SW clone race, dialog a11y, offline-queue misclassification + innings idempotency, and the innings-shape "not iterable" crash — normalized at the store boundary)
 - 178 unit tests + 47 §13 E2E + 45 §12 E2E all green; eslint/tsc clean on every touched file
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix bug — old match displayed after starting a new match
+
+Work Log:
+- Root cause: matchStore (zustand + persist → localStorage "gullyscore-match-state") is never reset — store.reset() existed but was never called anywhere. When a user started a new match, /matches/[id] fell back to `match || store.match` (old persisted match) while the new match's SWR fetch was in flight; loading screen was skipped (store.match non-null) and ScoringScreen renders directly from store.match/store.currentInnings → OLD match displayed. Worse: handleScore/handleWicket posted to the NEW matchId using OLD striker/bowler IDs (cross-match data corruption risk).
+- Fix 1 (src/app/matches/[id]/page.tsx):
+  - Render guard: persistedMatch = store.match only when store.match.id === matchId (offline-refresh of the SAME match still works)
+  - useIsomorphicLayoutEffect on [matchId]: wipes stale store (st.reset()) BEFORE paint — old match can never flash, stale IDs can never be written
+  - isLoading/swrError/matchData guards now use persistedMatch instead of store.match
+- Fix 2 (src/components/matches/MatchCreateForm.tsx): useMatchStore.getState().reset() after successful creation, before router.push
+- Fix 3 (src/hooks/useScoringHandlers.ts): cross-match guards — handleScore/handleWicket/handlePenalty bail if store.match.id !== matchId || currentInnings.matchId !== matchId; handleSetStriker/handleSetBowler/handleCompleteInnings/handleUndo/handleRedo bail if currentInnings.matchId !== matchId
+- Verified: bunx tsc --noEmit (no new errors), bun test 178/178 pass, bunx next build succeeds
+- Note: Bash tool output pipeline eats "[m" sequences (display artifact) — file contents verified intact via build/tests
+
+Stage Summary:
+- Old-match-display bug fixed at 3 layers (render guard, pre-paint store reset, write-path guards)
+- Offline resilience for same-match reload preserved (persistedMatch fallback keyed by match id)
+- No engine/API/schema changes — purely client-side

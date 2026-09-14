@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { deviceFetch } from '@/lib/device';
+import { useMatchStore } from '@/store/matchStore';
 import type { Team, MatchData, TossDecision } from '@/types';
 
 interface MatchCreateFormProps {
@@ -193,6 +194,11 @@ export function MatchCreateForm({ teams }: MatchCreateFormProps) {
         const err = await bowlerRes.json();
         throw new Error(err.error || 'Failed to set bowler');
       }
+
+      // Clear any persisted state from the previous match BEFORE navigating —
+      // otherwise the scoring page can briefly show (and write to) the old
+      // match while the new one loads. (The scoring page also guards this.)
+      useMatchStore.getState().reset();
 
       toast.success('Match created! Let\'s start scoring!');
       router.push(`/matches/${match.id}`);
