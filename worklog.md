@@ -787,3 +787,20 @@ Stage Summary:
 - One fold() code path now drives scoring, recalculation, undo/redo, editing, offline replay dedupe, and the UI's optimistic updates
 - 131 unit/property tests + 45 API E2E assertions + browser ACs all green; eslint/tsc clean on all changed files
 - Key deliverables: engine.ts v2, dls.ts + dls-table.json, scoring-engine.ts (event-sourced write path), 6 new/extended API routes, 9 UI components touched, MatchEditLog audit trail, house-rules sheet
+
+---
+Task ID: 20
+Agent: Main Agent
+Task: Push all new code (v2 §11 + §12 work) to GitHub
+
+Work Log:
+- Inspected repo state: 5 local commits (8d3315f README/Hero3D, 07dfd4a worklog, f3c9165 v2 prompt in public/, 96d8d41 §11 ground rules, 931912e §12 engine) vs 1 remote-only commit 8dcc539 (same README/untracking commit made via GitHub web UI, without Hero3D.tsx)
+- Discarded 14 files of pure file-mode noise (644→755, zero content changes) via git checkout
+- Reconciled divergence with a clean rebase: created prep commit 406d12c on top of origin/main carrying only the Hero3D.tsx addition (blob-identical to local, mode normalized to 644), then rebased the 4 local commits onto it — result tree byte-identical to pre-rebase main (only README mode 755→644 normalized)
+- Pre-push sanity: bun test on engine.test.ts + engine-v2.test.ts + dls.test.ts → 131/131 pass (855 expect calls, 192ms)
+- Pushed main to github.com/abdullahrahmani347/GullyScore.git → 8dcc539..5d99f9e accepted, no force needed
+- Verified: main...origin/main fully in sync, prep branch deleted, working tree clean
+
+Stage Summary:
+- Remote main now contains the full v2 Phase-1 stack: §11 pure-engine foundation + §12 Advanced Cricket Engine (free hits, powerplays, Gully-DLS, retired-hurt return, penalties, dismissal expansion, event-sourced undo/edit, 8-ball overs, house rules)
+- History preserved linearly on top of the user's GitHub web commit; nothing force-pushed
