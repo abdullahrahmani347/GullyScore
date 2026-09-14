@@ -869,3 +869,28 @@ Stage Summary:
 - Strike rotation fully fixed for new matches (v2 rules): rotation from ball 1, survivor semantics, working new-batter flow
 - v1-parity preserved (golden fixtures + pinned [P9] quirk); v1 matches get correct behavior via the UI flow
 - "Fix batters" tool recovers matches corrupted by the old bug (historical misattributed runs cannot be auto-repaired — those matches should be re-scored or the pair fixed going forward)
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Implement Scoring UX v2 (§14.0–14.11) — complete the orphaned-component integration, verify end-to-end, fix bugs found
+
+Work Log:
+- Found commit f1657a0 (UUID message, unpushed) holding 25 §14 files (+2953 lines) built by the cut-off session: SetupWizard, ProModeLayout, KeyboardScoring, VoiceScoring, ContextFooter, OfflineQueueInspector, SettingsSheet, Celebrations, feedback.ts, scoring-ux.ts, settingsStore/flags/matchStore fields — but 8 of 9 components were ORPHANED (never imported). No worklog entry, no tests, tsc/lint failing.
+- Integration (src/components/scoring/ScoringScreen.tsx): wizard replaces the SETUP_OPENER_1/2/SETUP_OPENING_BOWLER modal chain (fresh matches run toss→XI→bowler; interrupted setups resume via new initialInnings prop — never duplicating the innings row); ProModeLayout renders on useProMode() (landscape + coarse pointer, persisted override); KeyboardScoring mounted with overlay-aware active + Esc-closes-topmost; VoiceScoring behind useFeatures('voice') (default OFF); ContextFooter pinned above ScoreButtons (portrait) and under ProModeLayout; OfflineQueueInspector pill + 'feel' settings button in a header row; team tint (--team-tint) on the scoring root from teamTint(color, theme); shared commitExtra() so buttons/keyboard/voice share one extras semantics (NO_BALL = runs off the bat, +1 penalty engine-side)
+- SetupWizard resume support: skip toss when the innings row exists, XI defaults to the BATTING side, openers locked when already set, PATCH status LIVE on the resume path
+- PlayerSelectModal: suggestedPlayerId floats the engine's pick to the top with a 'next in' chip (new-batter sheet); MoreSheet: 'Scoring feel & layout' row opens SettingsSheet
+- BUG (wizard, found in live browser E2E): battingTeam derived from the toss WINNER, ignoring the DECISION — a 'field first' winner created the innings for the wrong team; XI defaulted to team1's squad at mount regardless of who batted. Fixed: decision state + XI re-defaults to the actual batting side after the toss (verified both coin outcomes + both decisions in browser)
+- BUG (API): striker/bowler routes accepted players from ANY team — a wrong-squad XI silently corrupted the innings (a Smoke A player both batting AND bowling). Both routes now 400 on wrong-team players
+- BUG (reconcile — the deep one): every write path called await mutate() while currentState was PROCESSING → the page's [match] effect hit the PROCESSING skip branch → the store never got the server data; the next polls returned deep-equal data so the effect never re-fired → per-batter/bowler/partnership rows froze at page-load values for the WHOLE session (totals updated only via optimistic). Fixed by settle-then-revalidate ordering in handleScore/handleWicket/handlePenalty/handleUndo/handleUndoToOverStart/handleRedo. Verified: footer shows b1 4(1) within one ball, no reload; undo/redo also reconcile
+- BUG (voice): parseVoiceCommand returned extraRuns=1 for no-balls (total semantics) while the commit path needs runs-off-the-bat → plain voice 'no ball' would have scored 2 runs. Fixed + regression test
+- Repairs: truncated CommentaryTicker edit (TS1005 syntax error), feedback.ts readonly-tuple/speech-queue typing, ContextFooter undefined param, VoiceScoring SpeechRecognition shape (isFinal on the result item); onend restart guard now uses recRef identity (every stop path nulls the ref first)
+- react-hooks (compiler) lint violations fixed: render-time ref writes moved into effects (KeyboardScoring/VoiceScoring), CommentaryTicker state-mirroring → derived from the prop (motion key = commentary.timestamp), ContextFooter slow-warn state → ref bookkeeping, ProModeLayout fake ref (plain object) → useRef
+- Tests: src/lib/scoring-ux.test.ts (47 tests covering every export: bowler/batter suggestions, hat-trick/five-for, over-rate, undo helpers, contrast/teamTint, voice grammar); scripts/verify-v14-e2e.ts (16 API-level checks: flags+voice-off default, guest lifecycle incl. roster filtering, wizard-shaped start, ball timestamps, strike rotation to a guest opener, undo/redo); full browser E2E via agent-browser: coin flip → bat/field → XI (correct team, drag rows, guest add, keeper tags) → suggested bowler → LIVE → keyboard 4/1 → context footer reconciliation → undo (badge 2→1) → redo, zero console errors
+- Gates: 231/231 bun tests, tsc clean on all touched files (pre-existing match-story/Hero3D/import.meta.dir errors untouched), eslint clean on all touched files (repo baseline elsewhere unchanged), production build green, standalone server verified
+- Committed 1a1ef6a (squashed the UUID-message f1657a0 with the integration work); mode bits normalized 755→644
+
+Stage Summary:
+- §14 fully delivered and LIVE-verified: wizard (≤4 taps to LIVE), Pro Mode, keyboard/voice scoring, feel layer, context footer + over-rate, queue inspector, undo everywhere, celebrations, smart suggestions, guests (§17.7 early)
+- Three correctness bugs fixed beyond the spec (wizard team logic, wrong-team API writes, PROCESSING reconcile freeze) — each found by driving the real UI
+- 231 unit tests + 16 §14 E2E all green; next: §15 Live Spectator v2
