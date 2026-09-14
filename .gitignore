@@ -69,3 +69,4 @@ server.log
 # v2 §11.1 — db push guard backups (never commit DB snapshots)
 db/backups/
 scripts/smoke-match-id.txt
+scripts/*.png

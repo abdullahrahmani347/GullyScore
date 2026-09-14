@@ -92,10 +92,10 @@ if (existsSync(prismaRuntime)) {
 console.log('\n📦 Removing typescript (devDep, not needed at runtime)...')
 tryRmSync(join(STANDALONE, 'node_modules/typescript'), 'typescript')
 
-// 2b. Remove sharp + @img (we set images.unoptimized = true in next.config)
-console.log('\n📦 Removing sharp / @img (image optimization disabled)...')
-tryRmSync(join(STANDALONE, 'node_modules/sharp'), 'sharp')
-tryRmSync(join(STANDALONE, 'node_modules/@img'), '@img')
+// 2b. KEEP sharp + @img — v2 §15.3 (/api/og/match/[id]) renders share cards
+// through sharp at runtime. The "images.unoptimized" rationale no longer
+// applies: sharp is a real route dependency now.
+console.log('\n📦 Keeping sharp + @img (§15.3 OG share card runtime dependency)...')
 
 // 3. Remove .next/cache if it leaked into standalone
 console.log('\n📦 Removing .next/cache if present...')
@@ -107,23 +107,37 @@ const { count: mapCount, bytes: mapBytes } = deleteByPattern(/\.map$/, STANDALON
 console.log(`  ✓ Removed ${mapCount} source map files`)
 logMb('  Source maps total', mapBytes)
 
-// 5. Remove .env files from standalone — Next.js copies the project root's
-// .env into the standalone output, which on the dev container contains
-// `DATABASE_URL=file:/home/z/my-project/db/custom.db`. That path doesn't
-// exist on the deploy target, and even though start.sh exports the correct
-// DATABASE_URL before launching the server, having a stale .env next to
-// server.js is a footgun (bun, Next.js, and Prisma all load .env files at
-// runtime; while each is supposed to respect existing env vars, leaving
-// the wrong value sitting there invites subtle bugs).
-console.log('\n📦 Removing .env files from standalone (avoid DATABASE_URL leakage)...')
+// 5. Sanitize .env in standalone: v2 §15.2 needs VAPID_* keys at runtime
+// (loaded by src/instrumentation.ts), but the dev container's .env carries
+// an absolute `DATABASE_URL=file:/home/z/...` path that does not exist on
+// deploy targets. Strip DATABASE_URL lines, keep everything else. Platform
+// env vars always win (the loader never overwrites existing values).
+console.log('\n📦 Sanitizing .env in standalone (drop DATABASE_URL, keep VAPID)...')
+import { readFileSync, writeFileSync } from 'fs'
 for (const target of [
   join(STANDALONE, '.env'),
   join(STANDALONE, '.env.local'),
   join(STANDALONE, '.env.production'),
   join(STANDALONE, '.env.development'),
 ]) {
-  if (existsSync(target)) {
-    tryRmSync(target, target.split('/').pop())
+  if (!existsSync(target)) continue
+  const name = target.split('/').pop()
+  try {
+    const raw = readFileSync(target, 'utf8')
+    const kept = raw
+      .split('\n')
+      .filter((line) => {
+        const t = line.trim()
+        return t !== '' && !t.startsWith('#') && !/^DATABASE_URL\s*=/i.test(t)
+      })
+    if (kept.length === 0) {
+      tryRmSync(target, `${name} (nothing to keep)`)
+    } else {
+      writeFileSync(target, kept.join('\n') + '\n')
+      console.log(`  ✓ Sanitized ${name} — kept ${kept.length} key(s)`)
+    }
+  } catch (e) {
+    console.warn(`  ! Could not sanitize ${name}: ${e.message}`)
   }
 }
 

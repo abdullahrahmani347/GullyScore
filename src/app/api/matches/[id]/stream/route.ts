@@ -1,19 +1,33 @@
-import { subscribeToMatch } from '@/lib/live-emitter';
+import {
+  subscribeToMatch,
+  replaySseEvents,
+  type LiveMatchEvent,
+} from '@/lib/live-emitter';
+import { SSE_HEARTBEAT_MS } from '@/lib/sse-events';
 import { db } from '@/lib/db';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * SSE endpoint: /api/matches/[id]/stream
- * Returns text/event-stream with real-time match updates.
- * Also sends initial state on connect so spectators see current score immediately.
+ * v2 §15.7 — SSE endpoint: /api/matches/[id]/stream
  *
- * NOTE: This endpoint does NOT verify device ownership. This is intentional —
- * spectators with a live code should be able to watch the match without
- * needing the creator's device ID. The live code itself serves as the
- * access token for spectator viewing. If stricter privacy is needed,
- * add a liveCode query parameter check here.
+ * Event framing:
+ *   id: <monotonic SseEvent id>     (persisted events only)
+ *   event: ball|wicket|over_complete|innings_break|match_complete|…
+ *   data: {...}
+ *   event: heartbeat                (every 25 s, no id — never replayed)
+ *   retry: 1000                     (reconnect hint; client uses 1 s→30 s
+ *                                    backoff, see hooks/useLiveStream.ts)
+ *
+ * Replay: a client that reconnects with `Last-Event-ID: n` (header, sent
+ * automatically by EventSource on auto-reconnect) or `?lastEventId=n`
+ * (manual backoff reconnect) gets every persisted event with id > n
+ * replayed from the DB event log BEFORE the live subscription is attached
+ * live — no missed balls during a subway ride.
+ *
+ * NOTE: no device-ownership check — the live code is the spectator access
+ * token (same policy as /api/live/[code]).
  */
 export async function GET(
   request: Request,
@@ -30,24 +44,77 @@ export async function GET(
     return new Response('Match not found', { status: 404 });
   }
 
-  const encoder = new TextEncoder();
+  // ── Last-Event-ID (header first, then query param for manual reconnects)
+  const url = new URL(request.url);
+  const headerId = request.headers.get('last-event-id');
+  const queryId = url.searchParams.get('lastEventId');
+  const lastEventId = parseLastEventId(headerId) ?? parseLastEventId(queryId) ?? null;
 
-  // Create a readable stream for SSE
+  const encoder = new TextEncoder();
+  let closed = false;
+
   const stream = new ReadableStream({
-    start(controller) {
-      // Send initial match state
-      const sendEvent = (eventName: string, data: unknown) => {
+    async start(controller) {
+      const send = (chunk: string) => {
+        if (closed) return;
         try {
-          controller.enqueue(
-            encoder.encode(`event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`)
-          );
+          controller.enqueue(encoder.encode(chunk));
         } catch {
-          // Stream may be closed
+          closed = true;
         }
       };
 
-      // Send initial full state
-      const sendInitialState = async () => {
+      const sendEvent = (event: LiveMatchEvent) => {
+        const idLine = event.id != null ? `id: ${event.id}\n` : '';
+        send(`${idLine}event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      };
+
+      const sendNamed = (name: string, data: unknown, id?: number) => {
+        const idLine = id != null ? `id: ${id}\n` : '';
+        send(`${idLine}event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+      };
+
+      // Reconnect hint for native EventSource auto-retry (v2 clients use
+      // their own 1 s→30 s backoff; this keeps v1 pages resilient too).
+      send('retry: 1000\n\n');
+
+      if (lastEventId != null) {
+        // ── RECONNECT: replay missed events, gap-free ──────────────────────
+        // Buffer live events while we query the DB so nothing published in
+        // between is lost, then flush the buffer past the replay cursor.
+        const buffer: LiveMatchEvent[] = [];
+        let live = false;
+        const unsubscribe = subscribeToMatch(matchId, (event) => {
+          if (live) sendEvent(event);
+          else buffer.push(event);
+        });
+
+        let replayed: LiveMatchEvent[] = [];
+        try {
+          replayed = await replaySseEvents(matchId, lastEventId);
+        } catch (err) {
+          console.error('[sse] replay query failed:', err);
+        }
+        for (const event of replayed) sendEvent(event);
+        const maxSeen = replayed.length
+          ? Math.max(...replayed.map((e) => e.id ?? 0))
+          : lastEventId;
+        // Flush buffered events not covered by the replay (dedupe by id).
+        for (const event of buffer) {
+          if ((event.id ?? 0) > maxSeen) sendEvent(event);
+        }
+        live = true;
+        if (closed) unsubscribe();
+        request.signal.addEventListener('abort', () => {
+          closed = true;
+          unsubscribe();
+          clearInterval(heartbeat);
+          try {
+            controller.close();
+          } catch {}
+        });
+      } else {
+        // ── FRESH CONNECT: initial full state, then live events ────────────
         try {
           const fullMatch = await db.match.findUnique({
             where: { id: matchId },
@@ -71,39 +138,39 @@ export async function GET(
           });
 
           if (fullMatch) {
-            sendEvent('init', fullMatch);
+            delete (fullMatch as { organizerPinHash?: string }).organizerPinHash;
+            sendNamed('init', fullMatch);
           }
         } catch (err) {
           console.error('Error sending initial state:', err);
         }
-      };
 
-      sendInitialState();
+        const unsubscribe = subscribeToMatch(matchId, (event) => {
+          sendEvent(event);
+        });
 
-      // Subscribe to live events
-      const unsubscribe = subscribeToMatch(matchId, (event) => {
-        sendEvent('update', event);
-      });
+        request.signal.addEventListener('abort', () => {
+          closed = true;
+          unsubscribe();
+          clearInterval(heartbeat);
+          try {
+            controller.close();
+          } catch {}
+        });
+      }
 
-      // Send keepalive every 25 seconds to prevent connection timeout
-      const keepalive = setInterval(() => {
-        try {
-          controller.enqueue(encoder.encode(':keepalive\n\n'));
-        } catch {
-          clearInterval(keepalive);
+      // ── Heartbeat (§15.7): typed 25 s keepalive, no id (never replayed)
+      const heartbeat = setInterval(() => {
+        if (closed) {
+          clearInterval(heartbeat);
+          return;
         }
-      }, 25000);
-
-      // Handle client disconnect
-      request.signal.addEventListener('abort', () => {
-        unsubscribe();
-        clearInterval(keepalive);
         try {
-          controller.close();
+          send(`event: heartbeat\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`);
         } catch {
-          // Already closed
+          clearInterval(heartbeat);
         }
-      });
+      }, SSE_HEARTBEAT_MS);
     },
   });
 
@@ -115,4 +182,10 @@ export async function GET(
       'X-Accel-Buffering': 'no', // Disable nginx buffering
     },
   });
+}
+
+function parseLastEventId(raw: string | null): number | null {
+  if (raw == null || raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
 }

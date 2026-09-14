@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordBall, EngineValidationError } from '@/lib/scoring-engine';
 import { emitLiveEvent } from '@/lib/live-emitter';
+import { queuePushNotification } from '@/lib/push';
 import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
@@ -21,7 +22,17 @@ export async function POST(
     const { id, iid } = await params;
 
     // Verify match ownership before recording ball
-    const match = await db.match.findUnique({ where: { id } });
+    const match = await db.match.findUnique({
+      where: { id },
+      include: {
+        team1: { select: { name: true } },
+        team2: { select: { name: true } },
+        innings: {
+          where: { id: iid },
+          select: { teamId: true, team: { select: { name: true } } },
+        },
+      },
+    });
     if (!match) {
       return NextResponse.json({ error: 'Match not found' }, { status: 404 });
     }
@@ -131,6 +142,56 @@ export async function POST(
 
     if (result.isMatchComplete) {
       emitLiveEvent(id, { type: 'match_complete', data: { inningsState: result.inningsState } });
+    }
+
+    // ── v2 §15.2 — web push fanout (queued; NEVER blocks the response) ──────
+    try {
+      const code = match.liveCode ?? null;
+      const teamsLabel = `${match.team1.name} v ${match.team2.name}`;
+      const battingLabel = match.innings[0]?.team?.name ?? 'Batting side';
+      const scoreLabel = `${result.inningsState.runs}/${result.inningsState.wickets}`;
+
+      if (result.ball.isWicket) {
+        queuePushNotification(id, {
+          title: 'WICKET!',
+          body: `${teamsLabel} — ${battingLabel} ${scoreLabel}`,
+          tag: `wicket-${id}`,
+          code,
+        });
+      }
+
+      // 50 / 100 milestones — striker crossing a threshold off this ball
+      // (inningsState is aggregate-only, so read the batting row directly)
+      const strikerRow = await db.batsmanInnings
+        .findUnique({
+          where: { inningsId_playerId: { inningsId: iid, playerId: result.ball.batsmanId } },
+          select: { runs: true, balls: true },
+        })
+        .catch(() => null);
+      if (strikerRow) {
+        const before = strikerRow.runs - result.ball.runs;
+        for (const milestone of [50, 100]) {
+          if (before < milestone && strikerRow.runs >= milestone) {
+            queuePushNotification(id, {
+              title: `${milestone} up!`,
+              body: `${battingLabel}: ${milestone} for the striker (${strikerRow.runs} off ${strikerRow.balls})`,
+              tag: `m${milestone}-${id}`,
+              code,
+            });
+          }
+        }
+      }
+
+      if (result.isMatchComplete) {
+        queuePushNotification(id, {
+          title: 'Match complete',
+          body: `${teamsLabel} — ${battingLabel} ${scoreLabel}`,
+          tag: `result-${id}`,
+          code,
+        });
+      }
+    } catch {
+      // push triggers are best-effort — scoring always wins
     }
 
     return NextResponse.json(result);

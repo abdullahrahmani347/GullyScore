@@ -271,3 +271,43 @@ self.addEventListener('message', function(event) {
     });
   }
 });
+
+/* ── v2 §15.2 — WEB PUSH ───────────────────────────────────────────────────
+ * Notification display lives here (the subscription lives in the app:
+ * /api/push/subscribe). Payload: { title, body, tag?, code? } — ≤ 512 B. */
+
+self.addEventListener('push', function(event) {
+  var data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: 'GullyScore', body: event.data ? event.data.text() : '' };
+  }
+  var title = data.title || 'GullyScore';
+  var url = data.code ? ('/live/' + data.code) : '/live';
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || '',
+      tag: data.tag || 'gullyscore',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: url }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  var url = (event.notification.data && event.notification.data.url) || '/live';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (client.url.indexOf(url) >= 0 && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});

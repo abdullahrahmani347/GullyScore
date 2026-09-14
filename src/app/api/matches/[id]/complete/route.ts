@@ -5,6 +5,7 @@ import { verifyOwnership, isAuthorized } from '@/lib/api-auth';
 import { ensureDbSchema } from '@/lib/db-bootstrap';
 import { isFeatureEnabled } from '@/lib/features';
 import { triggerAiReportGeneration } from '@/lib/match-report';
+import { queuePushNotification } from '@/lib/push';
 
 export async function POST(
   request: NextRequest,
@@ -107,6 +108,14 @@ export async function POST(
     if (isFeatureEnabled('aiReport')) {
       triggerAiReportGeneration(id);
     }
+
+    // v2 §15.2 — result push (queued fanout, never blocks the response)
+    queuePushNotification(id, {
+      title: 'Match complete',
+      body: result,
+      tag: `result-${id}`,
+      code: match.liveCode ?? null,
+    });
 
     return NextResponse.json(updatedMatch);
   } catch (error) {

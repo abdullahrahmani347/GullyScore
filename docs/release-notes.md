@@ -219,3 +219,33 @@ bun scripts/verify-v2-e2e.ts          # 45 §12 regression assertions
 # "Cover — 4 runs"; WP meter on the score header; scorecard → Match
 # insights (MVP, matchups, wagon, pitch map); /players/[id] career page.
 ```
+
+## v2 §15 — Live Spectator (2026-09-14)
+
+**§15.1 Live hub `/live`** — public server-rendered grid of LIVE matches (mini cards: teams, score, overs, striker, RRR, last-6 chips, PP/FH badges), tournament filter chips, "recently completed" rail, "Continue watching" rail from localStorage follows. Streamed: hub SSE (`/api/live/stream`) → debounced `/api/live` refetch + 30 s SWR fallback.
+
+**§15.2 Web Push** (flag `push`) — VAPID (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` env, `scripts/generate-vapid-keys.mjs`); bell popover on the live page opts in per match or "all"; `Subscription` model (§18: endpoint unique, matchId null = follow all); queue fanout in `lib/push.ts` — scoring never blocks (verified: wicket POST 14–18 ms with fanout live); events: wicket, 50/100 (DB row threshold crossing), result; payload clamped ≤ 512 B (`lib/push-payload.ts`); dead endpoints (404/410) auto-pruned; SW `push` + `notificationclick` handlers with deep link to `/live/[code]`.
+
+**§15.3 Share cards** — `/api/og/match/[id]` (also `?code=`): 1200×630 PNG via sharp — teams, scores, team colors, LIVE badge, QR to `/live/[code]` (qrcode SVG composited), exact `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`; XML-escaped user strings + validated hex colors. Story card: 9:16 export on the live page via html2canvas at 3× (1080×1920), inline hex colors only, client-side QR, PNG download.
+
+**§15.4 Reactions** (flag `reactions`) — six floating emoji (👍❤️😮😂👏🔥); client 1 s debounce batches per emoji; server coalesces 1 s per match (`lib/reactions.ts` in-memory window, 50/emoji cap) and broadcasts ONE ephemeral SSE `reaction` event per emoji — never persisted, no SSE id (excluded from replay); optimistic local floats + best-effort echo dedup.
+
+**§15.5 Ball timeline + Catch me up** — vertical per-over timeline (chips + one-line commentary, PP/FH/EDITED markers, newest over first, 72-ball cap); "Catch me up" is now a 5-bullet template summary (`lib/catch-me-up.ts` pure): where it stands (chase/projection), top-3 turning points (§13.9), fillers (milestone/partnership/powerplay), in-form players.
+
+**§15.6 Embeddable widget** — `/embed/match/[id]?theme=dark|light`: self-contained HTML (6.2 KB, ≤ 15 KB budget) with zero external assets; SSE when available else 10 s polling of `/api/embed/match/[id]`; `Content-Security-Policy: frame-ancestors *` ONLY on `/embed/*` (next.config headers); compact snapshot builder in `lib/live-hub.ts` (embedSnapshot).
+
+**§15.7 SSE v2 registry + replay** — typed event registry (`lib/sse-events.ts`): ball/state/innings/wp/reaction/heartbeat families, persisted vs ephemeral sets; `SseEvent` DB event log (SQLite INTEGER autoincrement = the monotonic SSE id, `Int` not BigInt — BIGINT PKs don't autoincrement in SQLite); every persisted event framed with `id:`; reconnect via `Last-Event-ID` (header or `?lastEventId=`) replays missed events from the DB with a buffer-then-flush design (no gap between replay and live); heartbeats every 25 s as named events (never replayed); client hook `useLiveStream` — manual backoff 1 s→30 s (doubling, reset on open), cursor tracking, replay indicator; hub stream + live page both use it.
+
+**§15.8 Team tint + follow + install** — live page accents tint with the batting team's color (`teamTint`, `--team-tint` CSS var); follow persists last-5 watched matches in localStorage (`useFollows` — hydration-safe useSyncExternalStore) feeding the hub's Continue-watching rail; install prompt on the 2nd live-page visit (beforeinstallprompt when available).
+
+**Fixes riding along** — E2E13 script updated to the v2 typed SSE framing (was listening for the v1 `event: update` envelope); `prune-standalone.mjs` now KEEPS sharp (OG route runtime dep) and sanitizes .env instead of deleting it (drops the dev DATABASE_URL path, keeps VAPID keys); `src/instrumentation.ts` loads .env at standalone-server boot (platform env always wins); match-complete route queues a result push.
+
+```bash
+bun test                              # 250 tests (49 golden + 131 v2 + 47 §13 + 23 §14 + 19 §15)
+bun scripts/verify-v15-e2e.ts         # 51 live-server assertions (§15)
+bun scripts/verify-v13-e2e.ts         # 47 §13 regression
+bun scripts/verify-v14-e2e.ts         # 16 §14 regression
+bun scripts/verify-v2-e2e.ts          # 45 §12 regression
+# Browser: /live grid → mini card → spectator page (timeline + catch-me-up
+# + reactions + bell + story export); /embed/match/[id] live-updates over SSE.
+```

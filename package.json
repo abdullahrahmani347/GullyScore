@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
-    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && (bun scripts/prune-standalone.mjs || echo 'prune skipped')",
+    "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && (cp .env .next/standalone/ 2>/dev/null || true) && (bun scripts/prune-standalone.mjs || echo 'prune skipped')",
     "start": "NODE_ENV=production node .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
     "test": "bun test",
@@ -89,6 +89,7 @@
     "three": "^0.185.1",
     "uuid": "^11.1.0",
     "vaul": "^1.1.2",
+    "web-push": "^3.6.7",
     "z-ai-web-dev-sdk": "^0.0.17",
     "zod": "^4.0.2",
     "zustand": "^5.0.6"

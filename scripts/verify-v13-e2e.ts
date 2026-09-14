@@ -63,15 +63,17 @@ async function collectSse(matchId: string, types: string[], ms: number): Promise
       while ((idx = buffer.indexOf('\n\n')) >= 0) {
         const frame = buffer.slice(0, idx);
         buffer = buffer.slice(idx + 2);
-        // Events arrive as `event: update` with an inner {type, data} envelope
+        // v2 §15.7: events arrive under their OWN typed name
+        // (`event: ball` etc.) with a {type, matchId, data} envelope as data.
         const evLine = frame.split('\n').find((l) => l.startsWith('event: '));
         const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
         if (evLine && dataLine) {
           const eventName = evLine.slice(7).trim();
-          if (eventName === 'update') {
+          if (eventName !== 'heartbeat' && eventName !== 'init' && eventName !== 'hello') {
             try {
               const payload = JSON.parse(dataLine.slice(6));
-              if (types.includes(payload.type)) found.push({ type: payload.type, data: payload.data });
+              const type = payload.type ?? eventName;
+              if (types.includes(type)) found.push({ type, data: payload.data });
             } catch {}
           }
         }

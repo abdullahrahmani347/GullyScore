@@ -23,6 +23,19 @@ const nextConfig: NextConfig = {
     "https://*.space-z.ai",
     "http://*.space-z.ai",
   ],
+  // v2 §15.6 — the embeddable widget is the ONLY route allowed to be
+  // framed anywhere (league sites, group chats). Every other route keeps
+  // the browser's default framing policy.
+  async headers() {
+    return [
+      {
+        source: "/embed/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: "frame-ancestors *" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

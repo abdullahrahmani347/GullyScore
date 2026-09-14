@@ -198,6 +198,32 @@ enum ExtraType {
   PENALTY
 }
 
+/// v2 §15.7 — DB-backed SSE event log for replay-on-reconnect.
+/// `id` is a global autoincrement → the monotonic SSE event id
+/// (deliveryNumber-anchored: ball events also carry their ball data).
+/// NOTE: Int (not BigInt) — SQLite only autoincrements INTEGER PRIMARY KEY.
+model SseEvent {
+  id        Int      @id @default(autoincrement())
+  matchId   String
+  type      String
+  data      String
+  createdAt DateTime @default(now())
+
+  @@index([matchId, id])
+}
+
+/// v2 §15.2/§18 — web push subscriptions. `endpoint` is unique per browser
+/// push subscription; `matchId` null = "follow all matches".
+model Subscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  matchId   String?
+  deviceId  String   @default("")
+  createdAt DateTime @default(now())
+}
+
 /// v2 §12.7 — audit trail for ball edits (who/when/before/after).
 model MatchEditLog {
   id        String   @id @default(cuid())

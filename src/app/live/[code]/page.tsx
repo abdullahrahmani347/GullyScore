@@ -1,13 +1,25 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { RefreshCw, AlertTriangle, Radio, Copy, Check } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Radio, Copy, Check, ArrowLeft, BellRing } from 'lucide-react';
 import { LogoMark } from '@/components/brand/Logo';
 import { formatOvers, calculateCRR, calculateRRR, formatStrikeRate, formatEconomy, formatBowlingFigures } from '@/lib/scoring-utils';
 import { WpLineChart, TurningPointsList } from '@/components/analytics';
+import { useLiveStream, type LiveStreamEvent } from '@/hooks/useLiveStream';
+import { shouldRefetch } from '@/lib/sse-events';
+import { teamTint } from '@/lib/scoring-ux';
+import { useSettingsStore } from '@/store/settingsStore';
+import { catchMeUpSummary } from '@/lib/catch-me-up';
+import { useFeatures } from '@/hooks/useFeatures';
+import { recordFollow } from '@/lib/follow';
+import PushBell from '@/components/live/PushBell';
+import StoryShareButton from '@/components/live/StoryShareButton';
+import ReactionBar from '@/components/live/ReactionBar';
+import BallTimeline from '@/components/live/BallTimeline';
 import type { MatchData, InningsState, BallRecord } from '@/types';
+import type { CSSProperties } from 'react';
 
 /* ─── v2 §12.3 — Target Adjusted Banner ─── */
 
@@ -67,9 +79,14 @@ function WinProbabilityPanel({
   );
 }
 
-function CatchMeUp({ match, currentInnings }: { match: MatchData; currentInnings: InningsState }) {
+function CatchMeUp({ match, currentInnings }: { match: MatchData; currentInnings: InningsState | null }) {
   const [open, setOpen] = useState(false);
-  const balls = (currentInnings.balls ?? []).filter((b) => b.deletedAt == null);
+  // §15.5 — 5-bullet template summary built on turning points (§13.9)
+  const bullets = useMemo(
+    () => catchMeUpSummary(match, currentInnings),
+    [match, currentInnings]
+  );
+  if (bullets.length === 0) return null;
   return (
     <div className="rounded-xl bg-bg-card border border-border overflow-hidden">
       <button
@@ -78,13 +95,30 @@ function CatchMeUp({ match, currentInnings }: { match: MatchData; currentInnings
         aria-expanded={open}
       >
         <span className="text-[10px] text-t3 uppercase tracking-wider font-medium">Catch me up</span>
-        <span className="text-[9px] text-t3">the moments that swung the match</span>
+        <span className="text-[9px] text-t3">the 5 moments that swung the match</span>
         <span className="ml-auto text-t3 text-xs">{open ? '−' : '+'}</span>
       </button>
       {open && (
-        <div className="px-2 pb-2">
-          <TurningPointsList match={match} balls={balls} compact limit={5} />
-        </div>
+        <ul className="px-3 pb-3 space-y-1.5">
+          {bullets.map((b, i) => (
+            <li key={i} className="flex items-start gap-2 text-[11px] leading-snug">
+              <span
+                className={`mt-0.5 w-4 h-4 flex items-center justify-center rounded shrink-0 text-[8px] font-bold ${
+                  b.kind === 'state'
+                    ? 'bg-accent/15 text-accent'
+                    : b.kind === 'turn'
+                      ? 'bg-wicket-bg text-wicket'
+                      : b.kind === 'star'
+                        ? 'bg-gold/15 text-gold'
+                        : 'bg-bg-elevated text-t3'
+                }`}
+              >
+                {b.kind === 'state' ? '●' : b.kind === 'turn' ? '↯' : b.kind === 'star' ? '★' : '•'}
+              </span>
+              <span className="text-t2">{b.text}</span>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -387,14 +421,14 @@ export default function SpectatorPage() {
   const [match, setMatch] = useState<MatchData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [copied, setCopied] = useState(false);
   // v2 §12.3 — target-adjusted banner state
   const [targetBanner, setTargetBanner] = useState<{ newTarget: number; method: string; reason: string; at: number } | null>(null);
   // v2 §13.1 — instant WP from the per-ball SSE broadcast
   const [liveWp, setLiveWp] = useState<number | null>(null);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const themeMode = useSettingsStore((s) => s.theme);
+  const { isEnabled } = useFeatures();
 
   // Fetch initial match data
   const fetchMatch = useCallback(async () => {
@@ -420,69 +454,72 @@ export default function SpectatorPage() {
     fetchMatch();
   }, [fetchMatch]);
 
-  // SSE connection
+  // §15.4 — event registry so ReactionBar (and future widgets) receive
+  // every typed SSE event without re-opening the stream.
+  const handlersRef = useRef(new Set<(event: LiveStreamEvent) => void>());
+  const registerEvent = useCallback((handler: (event: LiveStreamEvent) => void) => {
+    handlersRef.current.add(handler);
+    return () => {
+      handlersRef.current.delete(handler);
+    };
+  }, []);
+
+  // v2 §15.7 — live stream with manual 1 s→30 s backoff + Last-Event-ID
+  // replay (subway-ride guarantee: no missed balls on reconnect).
+  const { isConnected, isReplaying } = useLiveStream(match?.id ?? null, {
+    onEvent: (event) => {
+      setLastUpdate(new Date());
+      for (const handler of handlersRef.current) handler(event);
+
+      // v2 §13.1 — per-ball `wp` broadcast (instant, before the refetch)
+      if ((event.type === 'ball' || event.type === 'wicket') && typeof event.data?.wp === 'number') {
+        setLiveWp(event.data.wp as number);
+      }
+
+      // v2 §15.7 — typed registry decides which families trigger a refetch;
+      // metadata-only edits (wagon/pitch capture, §13.2/§13.3) are excluded
+      if (shouldRefetch(event.type) && !event.data?.metaOnly) {
+        fetchMatch();
+      }
+
+      // v2 §12.3 — "Target adjusted: 87 (DLS)" banner
+      if (event.type === 'target_adjusted' && event.data?.newTarget != null) {
+        setTargetBanner({
+          newTarget: event.data.newTarget as number,
+          method: (event.data.method as string) ?? 'dls',
+          reason: (event.data.reason as string) ?? '',
+          at: Date.now(),
+        });
+      }
+    },
+    onInit: (data) => {
+      if (data && typeof data === 'object' && 'id' in (data as Record<string, unknown>)) {
+        setMatch(data as MatchData);
+        setLastUpdate(new Date());
+      }
+    },
+  });
+
+  // §15.8 — follow: persist the last-watched match (localStorage)
   useEffect(() => {
     if (!match) return;
-
-    const matchId = match.id;
-    const es = new EventSource(`/api/matches/${matchId}/stream`);
-
-    es.onopen = () => {
-      setIsConnected(true);
-    };
-
-    es.onerror = () => {
-      setIsConnected(false);
-      // EventSource will auto-reconnect
-    };
-
-    es.addEventListener('init', (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        setMatch(data);
-        setLastUpdate(new Date());
-        setIsConnected(true);
-      } catch {}
+    recordFollow({
+      matchId: match.id,
+      code: (match.liveCode ?? code).replace(/^GS-/i, '').toUpperCase(),
+      team1: match.team1?.name ?? '',
+      team2: match.team2?.name ?? '',
+      status: match.status,
     });
+  }, [match?.id, code]); // record once per match, not per poll
 
-    es.addEventListener('update', (e) => {
-      try {
-        const event = JSON.parse(e.data);
-        setLastUpdate(new Date());
-
-        // v2 §13.1 — per-ball `wp` broadcast (instant, before the refetch)
-        if ((event.type === 'ball' || event.type === 'wicket') && typeof event.data?.wp === 'number') {
-          setLiveWp(event.data.wp as number);
-        }
-
-        // For ball/wicket/over_complete events, re-fetch full match data —
-        // except metadata-only edits (wagon/pitch capture, §13.2/§13.3)
-        if (
-          ['ball', 'wicket', 'over_complete', 'innings_break', 'match_complete', 'match_abandoned', 'status_change', 'undo', 'redo', 'ball_edited', 'target_adjusted'].includes(event.type) &&
-          !event.data?.metaOnly
-        ) {
-          fetchMatch();
-        }
-        // v2 §12.3 — "Target adjusted: 87 (DLS)" banner
-        if (event.type === 'target_adjusted' && event.data?.newTarget != null) {
-          setTargetBanner({
-            newTarget: event.data.newTarget as number,
-            method: (event.data.method as string) ?? 'dls',
-            reason: (event.data.reason as string) ?? '',
-            at: Date.now(),
-          });
-        }
-      } catch {}
-    });
-
-    eventSourceRef.current = es;
-
-    return () => {
-      es.close();
-      eventSourceRef.current = null;
-      setIsConnected(false);
-    };
-  }, [match?.id, fetchMatch]);
+  // §15.8 — team-color theming: accents tint with the batting team's
+  // color (auto-lightened for contrast via teamTint).
+  const tint = useMemo(() => {
+    const currentInnings = match?.innings?.find((i) => !i.isCompleted);
+    const color = currentInnings?.team?.color ?? match?.team1?.color;
+    if (!color) return 'transparent';
+    return teamTint(color, themeMode === 'light' ? 'light' : 'dark');
+  }, [match, themeMode]);
 
   const handleCopyLink = async () => {
     const url = `${window.location.origin}/live/${code}`;
@@ -532,22 +569,29 @@ export default function SpectatorPage() {
   const normalizedCode = code.replace(/^GS-/i, '').toUpperCase();
 
   return (
-    <div className="min-h-dvh bg-bg-app flex flex-col">
+    <div className="min-h-dvh bg-bg-app flex flex-col" style={{ '--team-tint': tint } as CSSProperties}>
       {/* Header */}
       <div className="px-4 pt-6 pb-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
+            <a
+              href="/live"
+              aria-label="Back to live hub"
+              className="w-7 h-7 flex items-center justify-center rounded-full bg-bg-elevated border border-border text-t3 hover:text-t2 hover:border-border-act transition-colors"
+            >
+              <ArrowLeft size={13} />
+            </a>
             <LogoMark size={20} />
             <h1 className="text-xl font-bold text-t1">GullyScore</h1>
           </div>
           <div className="flex items-center gap-2">
-            {/* Connection indicator */}
+            {/* Connection indicator (§15.7: replay state shows too) */}
             {isLive && (
               <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
                 isConnected ? 'bg-accent/15 text-accent' : 'bg-t3/15 text-t3'
               }`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-accent animate-pulse' : 'bg-t3'}`} />
-                {isConnected ? 'LIVE' : 'Reconnecting...'}
+                {isConnected ? (isReplaying ? 'Syncing…' : 'LIVE') : 'Reconnecting…'}
               </div>
             )}
             {isCompleted && (
@@ -556,6 +600,8 @@ export default function SpectatorPage() {
             {isAbandoned && (
               <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-orange-400/15 text-orange-400">Abandoned</span>
             )}
+            {/* v2 §15.2 — push bell (per match / all) */}
+            <PushBell matchId={match.id} />
           </div>
         </div>
 
@@ -572,7 +618,7 @@ export default function SpectatorPage() {
           </div>
         </div>
 
-        {/* Live code badge */}
+        {/* Live code badge + story share (§15.3) */}
         <div className="mt-2 flex items-center justify-center gap-2">
           <button
             onClick={handleCopyLink}
@@ -586,6 +632,7 @@ export default function SpectatorPage() {
               <Copy size={12} className="text-t3" />
             )}
           </button>
+          <StoryShareButton match={match} />
         </div>
       </div>
 
@@ -627,9 +674,14 @@ export default function SpectatorPage() {
               <WinProbabilityPanel match={match} currentInnings={currentInnings} liveWp={liveWp} />
             </div>
 
-            {/* v2 §13.9 — "Catch me up" turning-points digest */}
+            {/* v2 §13.9/§15.5 — "Catch me up" 5-bullet digest */}
             <div className="mt-2">
               <CatchMeUp match={match} currentInnings={currentInnings} />
+            </div>
+
+            {/* v2 §15.5 — ball timeline (chips + commentary, PP/FH/edited) */}
+            <div className="mt-2">
+              <BallTimeline match={match} currentInnings={currentInnings} />
             </div>
           </>
         ) : isCompleted || isAbandoned ? (
@@ -656,6 +708,12 @@ export default function SpectatorPage() {
 
       {/* Footer with last update time */}
       <div className="px-4 py-4 mt-auto">
+        {/* v2 §15.4 — reactions (flag-gated, anonymous, ephemeral) */}
+        {isEnabled('reactions') && isLive && currentInnings && (
+          <div className="mb-3">
+            <ReactionBar matchId={match.id} registerEvent={registerEvent} />
+          </div>
+        )}
         <div className="flex items-center justify-between text-[10px] text-t3">
           <span>{match.totalOvers} overs · {match.venue || 'Gully cricket'}</span>
           {lastUpdate && (
