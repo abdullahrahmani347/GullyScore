@@ -959,3 +959,23 @@ Work Log:
 
 Stage Summary:
 - All 6 top-level destinations reachable from home nav; /players + /api/players new; 250/250 tests; all routes 200 locally and via preview.
+
+---
+Task ID: 11
+Agent: main
+Task: Nav audit — surface every destination (Live hub, Players, CTAs)
+
+Work Log:
+- BottomNav: 4 → 6 tabs (Home, Live, Matches, Players, Teams, Leagues) with pulsing live-dot (useLiveCount hook polls /api/live 30s, fails silent); flex-1 layout safe at 320px.
+- SidebarNav: same 6 entries + live dot.
+- Dashboard: "Live Hub" link added to Live Matches header.
+- Landing footer: added Live + Players.
+- Matches page: added missing "New Match" CTA.
+- NEW /players directory page (search, sort by A-Z/runs/wickets, team-tinted jersey avatars, career aggregates) — only /players/[id] existed before.
+- NEW GET /api/players — device-scoped non-guest roster with groupBy career aggregates (no N+1).
+- 250/250 tests pass; touched-file tsc clean; production rebuilt & restarted; all routes 200 incl. /players via preview.
+- Push BLOCKED: ghp_92vG... token revoked mid-session (worked for b202ff2 & 1e507b2 pushes, then GitHub 401 "Bad credentials" / "Invalid username or token"). Nav commit is local only — needs fresh token.
+
+Stage Summary:
+- Commit (local, unpushed): "nav: expose every destination — 6-tab bottom/sidebar nav with live-dot indicator..." on top of 1e507b2.
+- App fully navigable: all 6 top-level sections + all CTAs reachable from home screen nav.
