@@ -80,6 +80,9 @@ export async function registerServiceWorker(): Promise<void> {
       registration.update().catch(() => {});
     }, 30 * 60 * 1000);
 
+    // v2 §16.1 — periodic live-hub cache refresh where supported
+    registerPeriodicLiveRefresh();
+
     console.log('[GullyScore] Service Worker registered');
   } catch (error) {
     console.error('[GullyScore] Service Worker registration failed:', error);
@@ -99,6 +102,42 @@ export async function applyUpdate(): Promise<void> {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       window.location.reload();
     }, { once: true });
+  }
+}
+
+/**
+ * v2 §16.1 — register a Background Sync tag so the browser wakes the app
+ * when connectivity returns (even if the tab is hidden). Safe no-op where
+ * the API is unsupported (Safari). Called after enqueueing offline work.
+ */
+export async function requestQueueSync(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const syncManager = (reg as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } }).sync;
+    await syncManager?.register('gullyscore-queue');
+  } catch {
+    // Not supported / already registered / feature flagged off — fine.
+  }
+}
+
+/**
+ * v2 §16.1 — register periodic background sync for the live-hub cache
+ * refresh where supported (Chromium, installed PWA). minInterval is a
+ * lower bound; the browser decides the real cadence.
+ */
+export async function registerPeriodicLiveRefresh(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const periodic = (reg as ServiceWorkerRegistration & { periodicSync?: { register: (tag: string, opts: { minInterval: number }) => Promise<void> } }).periodicSync;
+    const status = await (navigator.permissions as Permissions | undefined)?.query?.({ name: 'periodic-background-sync' as PermissionName }).catch(() => null);
+    if (status && status.state !== 'granted') return;
+    await periodic?.register('gullyscore-live-refresh', { minInterval: 12 * 60 * 60 * 1000 });
+  } catch {
+    // Not supported — the foreground polling path covers live refresh.
   }
 }
 

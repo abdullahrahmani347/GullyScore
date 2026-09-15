@@ -55,6 +55,7 @@ export async function POST(
       extraType,
       extraRuns,
       clientEventId,
+      expectedDeliveryNumber,
       penaltySide,
       reason,
     } = body;
@@ -79,6 +80,10 @@ export async function POST(
         extraType: extraType || null,
         extraRuns: extraRuns || 0,
         clientEventId: clientEventId || null,
+        expectedDeliveryNumber:
+          typeof expectedDeliveryNumber === 'number' && Number.isFinite(expectedDeliveryNumber)
+            ? expectedDeliveryNumber
+            : null,
         penaltySide: penaltySide || null,
         reason: reason || null,
       });

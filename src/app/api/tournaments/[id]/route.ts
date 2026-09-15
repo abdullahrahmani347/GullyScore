@@ -71,7 +71,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, format, totalOvers, status } = body;
+    const { name, format, totalOvers, status, squadLockDate, guestPlayersAllowed } = body;
 
     // Validate status transition
     if (status) {
@@ -95,6 +95,11 @@ export async function PUT(
         ...(format !== undefined && { format }),
         ...(totalOvers !== undefined && { totalOvers }),
         ...(status !== undefined && { status }),
+        // v2 §17.7 — squad lock date + per-tournament guest opt-in
+        ...(squadLockDate !== undefined && {
+          squadLockDate: squadLockDate ? new Date(squadLockDate) : null,
+        }),
+        ...(guestPlayersAllowed !== undefined && { guestPlayersAllowed: !!guestPlayersAllowed }),
       },
       include: {
         teams: { include: { team: true } },

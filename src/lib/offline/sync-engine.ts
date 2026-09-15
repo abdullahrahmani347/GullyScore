@@ -144,6 +144,18 @@ class SyncEngine {
       const response = await fetch(item.url, fetchOptions);
 
       if (response.ok) {
+        // v2 §16.3 — divergence probe: a synced ball response can report a
+        // deliveryNumber mismatch (another scorer/another tab wrote while we
+        // were offline). Surface the conflict sheet on the scoring screen.
+        try {
+          const body = await response.clone().json();
+          if (body && body.divergence) {
+            const { reportDivergence } = await import('./conflicts');
+            await reportDivergence(item.matchId, body.divergence.clientExpected, body.divergence.serverDeliveryNumber);
+          }
+        } catch {
+          // body not JSON / no divergence — nothing to do
+        }
         // Successfully synced — remove from queue
         await markSynced(item.id);
         return true;

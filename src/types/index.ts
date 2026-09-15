@@ -10,7 +10,7 @@ export type WicketType =
 export type ExtraType = 'WIDE' | 'NO_BALL' | 'BYE' | 'LEG_BYE' | 'PENALTY';
 export type MatchStatus = 'UPCOMING' | 'TOSS' | 'LIVE' | 'INNINGS_BREAK' | 'COMPLETED' | 'ABANDONED';
 export type TossDecision = 'BAT' | 'FIELD';
-export type TournamentFormat = 'ROUND_ROBIN' | 'KNOCKOUT';
+export type TournamentFormat = 'ROUND_ROBIN' | 'KNOCKOUT' | 'HYBRID';
 export type TournamentStatus = 'UPCOMING' | 'ONGOING' | 'COMPLETED';
 
 export type ScoringState =
@@ -223,6 +223,10 @@ export interface RecordBallResponse {
   needsNewBowler: boolean;
   needsInningsBreak: boolean;
   isMatchComplete: boolean;
+  /** v2 §16.3 — true when a replayed clientEventId was deduped server-side (no write) */
+  deduped?: boolean;
+  /** v2 §16.3 — non-null when the server's deliveryNumber differed from the client's expectation */
+  divergence?: { clientExpected: number; serverDeliveryNumber: number } | null;
 }
 
 export interface PartnershipData {
@@ -255,6 +259,8 @@ export interface TournamentTeamStat {
   runsConceded: number;
   oversFaced: number;
   oversBowled: number;
+  /** v2 §17.3 — tied through the whole chain, lots not drawn yet */
+  needsLots?: boolean;
 }
 
 export interface Tournament {
@@ -264,6 +270,12 @@ export interface Tournament {
   totalOvers: number;
   status: TournamentStatus;
   createdAt: string;
+  /** v2 §17.7 — after this date squads are locked (UI-enforced) */
+  squadLockDate?: string | null;
+  /** v2 §17.7 — one-off guest players allowed on a match XI */
+  guestPlayersAllowed?: boolean;
+  /** v2 §17.1/§17.5 — champion once the final completes */
+  championTeamId?: string | null;
   teams: TournamentTeamStat[];
   matches: MatchData[];
 }

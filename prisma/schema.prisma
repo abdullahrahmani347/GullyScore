@@ -63,6 +63,15 @@ model Match {
   deviceId       String        @default("")
   createdAt      DateTime      @default(now())
   completedAt    DateTime?
+  // v2 §17.2 — scheduled kickoff, venue contact and umpire assignments
+  scheduledAt    DateTime?
+  umpires        String?
+  // v2 §17.1 — bracket position: QF | SF | F | RR (round-robin stage)
+  round          String?
+  bracketSlot    Int?
+  // v2 §17.7 — per-match XI JSON { team1: [...], team2: [...] } incl. one-off
+  // guest names. Guests live on the match XI, never the team roster.
+  xi             String?
   // v2 §12.10 — per-match house rules, JSON text (null = v1 parity)
   rules          String?
   // v2 §12.3 — DLS/overs adjustments audit log, JSON array text
@@ -283,6 +292,14 @@ model Tournament {
   status     TournamentStatus @default(UPCOMING)
   deviceId   String           @default("")
   createdAt  DateTime         @default(now())
+  // v2 §17.7 — after this date team squads are locked (soft, UI-enforced)
+  squadLockDate DateTime?
+  // v2 §17.7 — per-tournament opt-in: allow one-off guest players on a match XI
+  guestPlayersAllowed Boolean    @default(false)
+  // v2 §17.3 — organizer "drawing of lots" result for fully-tied groups, JSON array of teamIds
+  lotsOrder    String?
+  // v2 §17.1/§17.5 — cached champion team id once the final completes
+  championTeamId String?
 
   teams   TournamentTeam[]
   matches Match[]
@@ -291,6 +308,7 @@ model Tournament {
 enum TournamentFormat {
   ROUND_ROBIN
   KNOCKOUT
+  HYBRID
 }
 
 enum TournamentStatus {

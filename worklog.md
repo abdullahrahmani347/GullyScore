@@ -979,3 +979,28 @@ Work Log:
 Stage Summary:
 - Commit (local, unpushed): "nav: expose every destination — 6-tab bottom/sidebar nav with live-dot indicator..." on top of 1e507b2.
 - App fully navigable: all 6 top-level sections + all CTAs reachable from home screen nav.
+
+---
+Task ID: 12
+Agent: main
+Task: v2 §16 Offline & Sync + §17 Tournaments
+
+Work Log (§16):
+- §16.5 SW v2: public/sw.js rewritten — cache names stamped with build id from /api/buildinfo (activate-time fetch, 'legacy' fallback), PRECACHE_MANIFEST integrity check re-fetches missing shell entries, purgeOldCaches kept broad, skipWaiting+clients.claim retained (silent updates), GET_BUILD_ID message.
+- §16.1 Background Sync: sync tag 'gullyscore-queue' → SW posts RUN_SYNC to all clients (Dexie/localStorage limitation documented in sw.js header); ServiceWorkerRegistration listens and runs syncAll(); requestQueueSync() fired after every enqueue; periodicSync 'gullyscore-live-refresh' registered where granted (SW-side fetch+cache of /api/live, no Dexie).
+- §16.2 Multi-tab: lib/offline/multi-tab.ts — BroadcastChannel('gullyscore') event mirror (ball/undo/edit/lock events), Web Locks soft lock `gullyscore-scorer-<matchId>` with steal-based Take over; useScorerLock hook + ScorerLockBanner (read-only + Take over); ScoreButtons `locked` prop; write-path guards isScoreLocked() in handleScore/handleWicket.
+- §16.3 Idempotency: engine dedupe now flags deduped:true; ball POST accepts expectedDeliveryNumber → response divergence{clientExpected,serverDeliveryNumber}; new GET /api/matches/[id]/events?since=; conflicts.ts registry (localStorage mirror) + ConflictSheet component ("Apply server" default, Keep mine = documented LWW); divergence surfaced from live responses AND sync-engine replays.
+- §16.4 Hygiene: storage-hygiene.ts — 50-match LRU registry + 90-day completed TTL eviction, getStorageQuota() meter (QuotaMeter in RecoveryScreen §14.9), navigator.storage.persist() once after first scored match; touchCachedMatch wired into ballEventSideEffects.
+
+Work Log (§17):
+- Schema (additive): TournamentFormat +HYBRID; Tournament.squadLockDate/guestPlayersAllowed/lotsOrder/championTeamId; Match.scheduledAt/umpires/round/bracketSlot/xi. db pushed, client regenerated.
+- §17.3: lib/standings.ts — chain points→NRR→head-to-head→most wins→lots (needsLots flagging); points-table route uses it; POST /draw-lots persists lotsOrder; PointsTable NRR tooltip with formula + worked example (0.1-notation note, all-out=full quota) + dice lots button. Fixed inverted h2h comparator sign (caught by new test).
+- §17.1: lib/bracket.ts — QF/SF/F auto-seed 1vN with byes, fixtures override, champion resolve; GET /bracket persists championTeamId; BracketView SVG (columns per round, connectors, live pulse, links to live/scorecard, champion banner); Bracket tab for KNOCKOUT/HYBRID; champion banner on page.
+- §17.2: schedule route GET extended + PATCH with double-booking detection (venue/team ±2h, 409+confirm); ScheduleEditor (list/calendar, drag-to-reslot, venue/time/umpire inline edit, conflict sheet).
+- §17.2/§17.6: GET /export?format=ics (RFC5545 fold/escape) & format=csv&type=points|fixtures|batting|bowling; share row (Share hub / .ics / CSV / PDF report); /tournaments/[id]/report print-styled brand report (window.print→PDF).
+- §17.4: GET /leaderboards (runs/wickets/MVP via §13.5 mvpIndex/economy ≥3 ov/SR ≥30 b, guest opt-in §17.7) + Leaderboards tabbed component; Stats tab on tournament page.
+- §17.5: GET /tournaments/[id]/public (no device scope): liveNow rail, fixtures/results, champion, standings-lite; share via navigator.share/clipboard.
+- §17.7: tournament PUT accepts squadLockDate+guestPlayersAllowed; edit sheet adds date + guest toggle; guests flagged in leaderboards (excluded unless opted in); Match.xi JSON for per-match XI incl. guest names.
+
+Stage Summary:
+- 261/261 tests (11 new: standings chain incl. h2h sign-fix regression, bracket seeding/byes/champion); touched-file tsc clean; prod rebuilt+restarted; all routes + new APIs 200 (smoke: HYBRID tournament seeded, bracket auto-seeded F, ICS/CSV export live).

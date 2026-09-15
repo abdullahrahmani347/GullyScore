@@ -14,6 +14,10 @@ import {
   Play,
   CheckCircle2,
   AlertCircle,
+  Share2,
+  Download,
+  GitMerge,
+  Medal,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -23,7 +27,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { PointsTable } from '@/components/tournaments/PointsTable';
-import { ScheduleList } from '@/components/tournaments/ScheduleList';
+import { ScheduleEditor } from '@/components/tournaments/ScheduleEditor';
+import { BracketView } from '@/components/tournaments/BracketView';
+import { Leaderboards } from '@/components/tournaments/Leaderboards';
 import { TournamentMvpCard } from '@/components/analytics';
 import {
   Sheet,
@@ -56,7 +62,7 @@ import type { Tournament, TournamentFormat, TournamentStatus, TournamentTeamStat
 
 const fetcher = safeDeviceFetcher;
 
-type TabKey = 'points' | 'schedule' | 'teams';
+type TabKey = 'points' | 'schedule' | 'bracket' | 'stats' | 'teams';
 
 function StatusBadge({ status }: { status: TournamentStatus }) {
   switch (status) {
@@ -87,6 +93,8 @@ export default function TournamentDetailPage() {
   const router = useRouter();
   const tournamentId = params.id as string;
   const [activeTab, setActiveTab] = useState<TabKey>('points');
+  // v2 §17.3 — drawing-of-lots pending state
+  const [lotsPending, setLotsPending] = useState(false);
 
   // SWR hooks
   const {
@@ -131,11 +139,21 @@ export default function TournamentDetailPage() {
   );
   const isScheduleError = !!scheduleError;
 
+  // v2 §17.1 — bracket for KNOCKOUT / HYBRID formats
+  const isKnockoutish = tournament?.format === 'KNOCKOUT' || tournament?.format === 'HYBRID';
+  const { data: bracketData, mutate: mutateBracket } = useSWR<{ rounds: never[]; champion: never; needsGeneration: boolean }>(
+    tournament && isKnockoutish ? `/api/tournaments/${tournamentId}/bracket` : null,
+    fetcher,
+  );
+
   // Edit sheet state
   const [showEditForm, setShowEditForm] = useState(false);
   const [editName, setEditName] = useState('');
   const [editFormat, setEditFormat] = useState<TournamentFormat>('ROUND_ROBIN');
   const [editTotalOvers, setEditTotalOvers] = useState('');
+  // v2 §17.7 — squad lock + guest opt-in
+  const [editSquadLockDate, setEditSquadLockDate] = useState('');
+  const [editGuestsAllowed, setEditGuestsAllowed] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Delete state
@@ -156,6 +174,12 @@ export default function TournamentDetailPage() {
     setEditName(tournament.name);
     setEditFormat(tournament.format);
     setEditTotalOvers(String(tournament.totalOvers));
+    setEditSquadLockDate(
+      tournament.squadLockDate
+        ? new Date(tournament.squadLockDate).toISOString().slice(0, 10)
+        : '',
+    );
+    setEditGuestsAllowed(!!tournament.guestPlayersAllowed);
     setShowEditForm(true);
   };
 
@@ -178,6 +202,8 @@ export default function TournamentDetailPage() {
           name: editName.trim(),
           format: editFormat,
           totalOvers: totalOversNum,
+          squadLockDate: editSquadLockDate || null,
+          guestPlayersAllowed: editGuestsAllowed,
         }),
       });
       if (!res.ok) {
@@ -309,9 +335,49 @@ export default function TournamentDetailPage() {
   const canStartLeague = tournament.status === 'UPCOMING';
   const canCompleteLeague = tournament.status === 'ONGOING' && allMatchesCompleted;
 
+  // v2 §17.3 — organizer drawing-of-lots action
+  const handleDrawLots = async (teamIds: string[]) => {
+    setLotsPending(true);
+    try {
+      const res = await deviceFetch(`/api/tournaments/${tournamentId}/draw-lots`, {
+        method: 'POST',
+        body: JSON.stringify({ teamIds }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Failed to draw lots');
+      }
+      toast.success('Lots drawn — order updated');
+      mutatePoints();
+      mutateBracket();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to draw lots');
+    } finally {
+      setLotsPending(false);
+    }
+  };
+
+  // v2 §17.5 — share the tournament hub like a match
+  const handleShare = async () => {
+    const url = `${window.location.origin}/tournaments/${tournamentId}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: tournament.name, text: `${tournament.name} — ${tournament.teams.length} teams on GullyScore`, url });
+      } else {
+        await navigator.clipboard.writeText(url);
+        toast.success('Link copied');
+      }
+    } catch {
+      // share cancelled
+    }
+  };
+
   const tabs: { key: TabKey; label: string; icon: any }[] = [
     { key: 'points', label: 'Points', icon: BarChart3 },
     { key: 'schedule', label: 'Schedule', icon: Calendar },
+    // v2 §17.1 — bracket tab for knockout / hybrid formats
+    ...(isKnockoutish ? [{ key: 'bracket' as TabKey, label: 'Bracket', icon: GitMerge }] : []),
+    { key: 'stats', label: 'Stats', icon: Medal },
     { key: 'teams', label: 'Teams', icon: Users },
   ];
 
@@ -348,7 +414,7 @@ export default function TournamentDetailPage() {
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-gold-dim">
               <Trophy size={22} className="text-gold" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold text-t1">{tournament.name}</h2>
               <p className="text-xs text-t3">
                 {tournament.format === 'ROUND_ROBIN'
@@ -397,6 +463,69 @@ export default function TournamentDetailPage() {
             </span>
           </div>
         </motion.div>
+      </div>
+
+      {/* v2 §17.1/§17.5 — champion banner on completion */}
+      {(() => {
+        const championTeam = tournament.championTeamId
+          ? tournament.teams.find((tt) => tt.teamId === tournament.championTeamId)?.team
+          : null;
+        if (!championTeam) return null;
+        return (
+          <div className="px-4 mt-3">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="rounded-2xl border border-gold/40 p-4 flex items-center gap-3"
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(255,215,0,0.18) 0%, rgba(255,215,0,0.04) 100%)',
+              }}
+            >
+              <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center flex-shrink-0">
+                <Trophy size={18} className="text-gold" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gold">Champion</p>
+                <p className="text-base font-bold text-t1 truncate">
+                  {championTeam.emoji} {championTeam.name}
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        );
+      })()}
+
+      {/* v2 §17.2/§17.5/§17.6 — share + exports row */}
+      <div className="px-4 mt-3 flex items-center gap-2 flex-wrap">
+        <button
+          onClick={handleShare}
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-bg-card border border-border text-t2 text-xs font-medium hover:text-t1 transition-colors"
+        >
+          <Share2 size={13} />
+          Share hub
+        </button>
+        <a
+          href={`/api/tournaments/${tournamentId}/export?format=ics`}
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-bg-card border border-border text-t2 text-xs font-medium hover:text-t1 transition-colors"
+        >
+          <Calendar size={13} />
+          .ics
+        </a>
+        <a
+          href={`/api/tournaments/${tournamentId}/export?format=csv&type=points`}
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-bg-card border border-border text-t2 text-xs font-medium hover:text-t1 transition-colors"
+        >
+          <Download size={13} />
+          CSV
+        </a>
+        <button
+          onClick={() => window.open(`/tournaments/${tournamentId}/report`, '_blank')}
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg bg-bg-card border border-border text-t2 text-xs font-medium hover:text-t1 transition-colors"
+        >
+          <Download size={13} />
+          PDF report
+        </button>
       </div>
 
       {/* Status Transition Buttons */}
@@ -481,7 +610,8 @@ export default function TournamentDetailPage() {
               </div>
             ) : pointsData ? (
               <div className="space-y-3">
-                <PointsTable pointsTable={pointsData.pointsTable} />
+                {/* v2 §17.3 — full tiebreaker chain + drawing-of-lots tool */}
+                <PointsTable pointsTable={pointsData.pointsTable} onDrawLots={handleDrawLots} lotsPending={lotsPending} />
                 {/* v2 §13.5 — season MVP leaderboard across completed matches */}
                 <TournamentMvpCard
                   matches={(tournament?.matches ?? []) as unknown as MatchData[]}
@@ -518,7 +648,10 @@ export default function TournamentDetailPage() {
                 </Button>
               </div>
             ) : scheduleData ? (
-              <ScheduleList schedule={scheduleData.schedule} />
+              /* v2 §17.2 — full schedule editor (drag-to-reslot, venue/time/umpires,
+                double-booking detection). Read-only list kept for non-organizer
+                contexts via the same component (canEdit=false). */
+              <ScheduleEditor schedule={scheduleData.schedule} canEdit tournamentId={tournamentId} />
             ) : (
               <div className="space-y-2">
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -526,6 +659,32 @@ export default function TournamentDetailPage() {
                 ))}
               </div>
             )}
+          </motion.div>
+        )}
+
+        {/* v2 §17.1 — knockout bracket (KNOCKOUT / HYBRID only) */}
+        {activeTab === 'bracket' && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            {bracketData ? (
+              <BracketView bracket={bracketData as unknown as import('@/lib/bracket').BracketData} />
+            ) : (
+              <Skeleton className="h-64 rounded-xl bg-bg-card" />
+            )}
+          </motion.div>
+        )}
+
+        {/* v2 §17.4 — leaderboards: MVP / runs / wickets / economy / SR */}
+        {activeTab === 'stats' && (
+          <motion.div
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Leaderboards tournamentId={tournamentId} />
           </motion.div>
         )}
 
@@ -656,6 +815,10 @@ export default function TournamentDetailPage() {
                   <SelectItem value="KNOCKOUT" className="text-t1 focus:bg-bg-input focus:text-t1">
                     Knockout
                   </SelectItem>
+                  {/* v2 §17.1 — round robin stage + knockout bracket */}
+                  <SelectItem value="HYBRID" className="text-t1 focus:bg-bg-input focus:text-t1">
+                    Hybrid (RR + Knockout)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -675,6 +838,39 @@ export default function TournamentDetailPage() {
                 className="bg-bg-input border-border text-t1 placeholder:text-t3 rounded-xl h-11"
               />
             </div>
+
+            {/* v2 §17.7 — squad lock date */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-squad-lock" className="text-t2">
+                Squad lock date (optional)
+              </Label>
+              <Input
+                id="edit-squad-lock"
+                type="date"
+                value={editSquadLockDate}
+                onChange={(e) => setEditSquadLockDate(e.target.value)}
+                className="bg-bg-input border-border text-t1 rounded-xl h-11"
+              />
+              <p className="text-[11px] text-t3">
+                After this date team squads are locked and cannot be edited.
+              </p>
+            </div>
+
+            {/* v2 §17.7 — guest players opt-in */}
+            <label className="flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-card p-3 cursor-pointer">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-t1">Allow guest players</span>
+                <span className="block text-[11px] text-t3 mt-0.5">
+                  One-off guests on a match XI — stats count but are flagged in leaderboards.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={editGuestsAllowed}
+                onChange={(e) => setEditGuestsAllowed(e.target.checked)}
+                className="w-5 h-5 accent-[var(--accent)] flex-shrink-0"
+              />
+            </label>
 
             {/* Submit Button */}
             <Button

@@ -18,7 +18,10 @@ import {
 import { predictAfterBall, newClientEventId, parseHouseRules, freeHitPending } from '@/lib/scoring-context';
 import { feedback } from '@/lib/feedback';
 import { liveBallsInOver } from '@/lib/scoring-ux';
-import type { ExtraType, WicketType, BallRecord } from '@/types';
+import { broadcastScoreEvent, isScoreLocked } from '@/lib/offline/multi-tab';
+import { touchCachedMatch, requestPersistentStorageOnce } from '@/lib/offline/storage-hygiene';
+import { reportDivergence } from '@/lib/offline/conflicts';
+import type { ExtraType, WicketType, BallRecord, RecordBallResponse } from '@/types';
 
 interface UseScoringHandlersProps {
   matchId: string;
@@ -61,6 +64,46 @@ function pentingSideLabel(side: 'batting' | 'bowling'): string {
   return side === 'batting' ? 'batting side' : 'bowling side';
 }
 
+/**
+ * v2 §16.2/§16.4 — central side-effects after a ball event is persisted
+ * (online OR queued offline):
+ *   - BroadcastChannel('gullyscore') mirror so sibling tabs revalidate
+ *   - cached-match registry touch (LRU + TTL hygiene pass, cap 50)
+ *   - one-time navigator.storage.persist() after the first scored match
+ */
+function ballEventSideEffects(
+  matchId: string,
+  kind: 'ball' | 'undo' | 'edit',
+  deliveryNumber?: number,
+  result?: RecordBallResponse | null,
+) {
+  try {
+    broadcastScoreEvent({ kind, matchId, deliveryNumber, at: Date.now() });
+  } catch {
+    // cross-tab mirror is best-effort
+  }
+  try {
+    void import('@/store/matchStore').then(({ useMatchStore }) => {
+      const m = useMatchStore.getState().match;
+      if (m) {
+        touchCachedMatch(m.id, m.status ?? 'LIVE');
+      }
+    });
+  } catch {
+    // hygiene is best-effort
+  }
+  try {
+    void requestPersistentStorageOnce();
+  } catch {
+    // persist() unsupported — browser default eviction applies
+  }
+  // v2 §16.3 — sequence divergence: fetch the divergent server events and
+  // surface the conflict sheet ("Apply server" default) on the scoring screen.
+  if (result?.divergence) {
+    void reportDivergence(matchId, result.divergence.clientExpected, result.divergence.serverDeliveryNumber);
+  }
+}
+
 export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps) {
   // v2 §12.7 — redo appears after an undo (tail-of-log tombstone)
   const [redoAvailable, setRedoAvailable] = useState(false);
@@ -76,6 +119,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     // striker/bowler/innings IDs that don't belong to THIS match.
     if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
     if (store.match.id !== matchId || store.currentInnings.matchId !== matchId) return;
+    // v2 §16.2 — a sibling tab holds the scorer lock; this tab is read-only.
+    if (isScoreLocked(matchId)) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -88,6 +133,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       extraType: extraType ?? null,
       extraRuns: extraRuns ?? 0,
       clientEventId: opts?.clientEventId ?? newClientEventId(),
+      // v2 §16.3 — divergence probe: server compares with its own next number
+      expectedDeliveryNumber: (store.currentInnings.balls?.length ?? 0) + 1,
     };
 
     const summary = getBallSummary(ballData);
@@ -205,6 +252,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         else store.setState('SCORING');
         await mutate();
       }
+      ballEventSideEffects(matchId, 'ball', (store.currentInnings.balls?.length ?? 0) + 1, result as RecordBallResponse | undefined);
     } catch (err) {
       // Rollback: settle first, then re-fetch actual data from the server
       store.setState('SCORING');
@@ -230,6 +278,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
     // striker/bowler/innings IDs that don't belong to THIS match.
     if (store.isSubmitting || !store.strikerId || !store.currentBowlerId || !store.currentInnings || !store.match) return;
     if (store.match.id !== matchId || store.currentInnings.matchId !== matchId) return;
+    // v2 §16.2 — a sibling tab holds the scorer lock; this tab is read-only.
+    if (isScoreLocked(matchId)) return;
 
     store.setState('PROCESSING');
     store.setSubmitting(true);
@@ -245,6 +295,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       extraType: wicketData.extraType ?? null,
       extraRuns: wicketData.extraRuns ?? 0,
       clientEventId: newClientEventId(),
+      // v2 §16.3 — divergence probe
+      expectedDeliveryNumber: (store.currentInnings.balls?.length ?? 0) + 1,
     };
 
     const summary = getBallSummary(ballData);
@@ -362,6 +414,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         else store.setState('SCORING');
         await mutate();
       }
+      ballEventSideEffects(matchId, 'ball', (store.currentInnings.balls?.length ?? 0) + 1, result as RecordBallResponse | undefined);
     } catch (err) {
       store.setState('SCORING');
       await mutate();
@@ -397,6 +450,8 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
       penaltySide,
       reason,
       clientEventId: newClientEventId(),
+      // v2 §16.3 — divergence probe
+      expectedDeliveryNumber: (store.currentInnings.balls?.length ?? 0) + 1,
     };
 
     try {
@@ -468,6 +523,7 @@ export function useScoringHandlers({ matchId, mutate }: UseScoringHandlersProps)
         await mutate();
         toast.success('Last ball undone');
       }
+      ballEventSideEffects(matchId, 'undo');
     } catch {
       toast.error('Failed to undo — please try again');
     } finally {

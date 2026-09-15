@@ -51,6 +51,8 @@ export interface RecordBallInputV2 extends RecordBallInput {
   clientEventId?: string | null;
   penaltySide?: 'batting' | 'bowling' | null;
   reason?: string | null;
+  /** v2 §16.3 — the deliveryNumber the CLIENT believes is next; mismatch = divergence */
+  expectedDeliveryNumber?: number | null;
 }
 
 export interface BallEditPatch {
@@ -132,7 +134,18 @@ function rulesFor(loaded: LoadedInnings): MatchRules {
 }
 
 /** Build the UI-facing response from a folded state (v1 shape preserved). */
-function buildResponse(ballRow: unknown, state: InningsState, rules: MatchRules, loaded: LoadedInnings): RecordBallResponse {
+function buildResponse(
+  ballRow: unknown,
+  state: InningsState,
+  rules: MatchRules,
+  loaded: LoadedInnings,
+  extras?: {
+    /** §16.3 — true when a replayed clientEventId was deduped (no write) */
+    deduped?: boolean;
+    /** §16.3 — client/server deliveryNumber divergence (sequence gap) */
+    divergence?: { clientExpected: number; serverDeliveryNumber: number } | null;
+  },
+): RecordBallResponse {
   const ballsRemaining =
     loaded.inningsNumber === 2 && loaded.target != null
       ? rules.totalOvers * rules.ballsPerOver - state.legalBalls
@@ -175,6 +188,9 @@ function buildResponse(ballRow: unknown, state: InningsState, rules: MatchRules,
     needsNewBowler: state.lastEffects?.needsNewBowler ?? false,
     needsInningsBreak: state.lastEffects?.needsInningsBreak ?? false,
     isMatchComplete: state.lastEffects?.isMatchComplete ?? false,
+    // §16.3 — idempotent replays + sequence divergence signals
+    deduped: extras?.deduped,
+    divergence: extras?.divergence ?? null,
   };
 }
 
@@ -194,7 +210,9 @@ export async function recordBall(
     const existing = await db.ball.findUnique({ where: { clientEventId: input.clientEventId } });
     if (existing && existing.inningsId === inningsId) {
       const state = fold(loaded.events, rules);
-      return buildResponse(existing, state, rules, loaded);
+      // §16.3 — a REPLAY is not divergence: the client already holds this
+      // event (its local log may be ahead of the ack). No divergence signal.
+      return buildResponse(existing, state, rules, loaded, { deduped: true });
     }
     if (existing && existing.inningsId !== inningsId) {
       throw new EngineValidationError('VALIDATION', 'clientEventId already used in another innings.');
@@ -295,7 +313,18 @@ export async function recordBall(
     await db.match.update({ where: { id: loaded.matchId }, data: { currentInnings: 2 } });
   }
 
-  return buildResponse(ball, finalState, rules, loaded);
+  return buildResponse(ball, finalState, rules, loaded, {
+    // §16.3 — sequence gap: the client believed the next event had a
+    // different deliveryNumber than the server assigned → its local log is
+    // missing/diverged from server truth. The response tells the client to
+    // SSE-resync and offer the conflict sheet. Server ALWAYS wins the
+    // numbering (last-write-wins on content is documented for v2).
+    divergence:
+      input.expectedDeliveryNumber != null &&
+      input.expectedDeliveryNumber !== nextDeliveryNumber
+        ? { clientExpected: input.expectedDeliveryNumber, serverDeliveryNumber: nextDeliveryNumber }
+        : null,
+  });
 }
 
 // ---------------------------------------------------------------------------

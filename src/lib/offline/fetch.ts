@@ -146,6 +146,15 @@ export async function offlineFetch<T = any>(
       message: 'Recorded offline — will sync when connected',
     } as T;
 
+    // v2 §16.1 — ask the browser for a Background Sync tick ('gullyscore-queue')
+    // so hidden/closed tabs also drain the queue when connectivity returns.
+    try {
+      const { requestQueueSync } = await import('./sw-register');
+      void requestQueueSync();
+    } catch {
+      // SW not available — foreground 'online' listener remains primary
+    }
+
     return { data: syntheticResponse, offline: true, queuedItemId };
   }
 

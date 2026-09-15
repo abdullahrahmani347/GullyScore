@@ -27,6 +27,9 @@ import { KeyboardScoring } from './KeyboardScoring';
 import { VoiceScoring } from './VoiceScoring';
 import { ContextFooter } from './ContextFooter';
 import { OfflineQueueInspector } from './OfflineQueueInspector';
+import { ScorerLockBanner } from './ScorerLockBanner';
+import { ConflictSheet } from './ConflictSheet';
+import { useScorerLock } from '@/hooks/useScorerLock';
 import { SettingsSheet } from './SettingsSheet';
 import { SetupWizard } from './SetupWizard';
 import { WagonPromptSheet, PitchMapPromptSheet, wagonPromptDisabled } from '@/components/analytics';
@@ -44,6 +47,10 @@ interface ScoringScreenProps {
 
 export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
   const store = useMatchStore();
+  // v2 §16.2 — Web Locks scorer lock: this tab either holds the lock (can
+  // score), lost it (read-only + "Take over" banner), or the API is missing
+  // (scoring stays enabled — offline-first wins).
+  const { canScore, state: scorerLockState, takeOver } = useScorerLock(matchId);
   const {
     handleScore,
     handleWicket,
@@ -614,6 +621,12 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
         </>
       ) : (
         <>
+          {/* v2 §16.2 — read-only banner + "Take over" when another tab holds the lock */}
+          <ScorerLockBanner state={scorerLockState} onTakeOver={takeOver} />
+
+          {/* v2 §16.3 — sequence divergence: "Apply server" conflict resolution */}
+          <ConflictSheet onApply={mutate} />
+
           {/* v2 §14.9 — offline queue pill · v2 §14.1 — feel & layout entry */}
           <div className="flex items-center justify-between px-3 pt-2 gap-2">
             <OfflineQueueInspector matchId={matchId} />
@@ -702,6 +715,7 @@ export function ScoringScreen({ matchId, mutate }: ScoringScreenProps) {
               onRedo={handleRedo}
               redoAvailable={redoAvailable}
               onMore={() => setMoreSheetOpen(true)}
+              locked={!canScore}
             />
           </div>
         </>

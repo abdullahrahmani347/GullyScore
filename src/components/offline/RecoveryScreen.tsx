@@ -1,14 +1,62 @@
 'use client';
 
-import { useState } from 'react';
-import { AlertTriangle, RefreshCw, Trash2, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertTriangle, RefreshCw, Trash2, X, ChevronDown, ChevronUp, HardDrive } from 'lucide-react';
 import { useOfflineSync } from '@/hooks/useConnectivity';
 import type { OfflineQueueItem } from '@/lib/offline/db';
+import { getStorageQuota, type StorageQuotaInfo } from '@/lib/offline/storage-hygiene';
 
 /** Maximum manual retries before disabling the retry button */
 const MAX_MANUAL_RETRIES = 5;
 /** Cooldown in ms after a failed retry before allowing another */
 const RETRY_COOLDOWN_MS = 3000;
+
+function formatBytes(n: number): string {
+  if (!n) return '0 B';
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * v2 §16.4 — QuotaMeter — navigator.storage.estimate() gauge shown inside
+ * the §14.9 queue inspector so scorers can see how much offline data their
+ * device is holding and whether the origin is persisted.
+ */
+export function QuotaMeter() {
+  const [quota, setQuota] = useState<StorageQuotaInfo | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void getStorageQuota().then((info) => {
+      if (alive) setQuota(info);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!quota || !quota.supported) return null;
+
+  const pct = Math.round(quota.percent);
+  const tone = pct >= 90 ? 'bg-wicket' : pct >= 70 ? 'bg-gold' : 'bg-accent';
+
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-bg-elevated/60 border border-border/50">
+      <HardDrive size={14} className="text-t3 flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between text-[10px] text-t3 mb-1">
+          <span>Offline storage {quota.persisted ? '· persisted' : ''}</span>
+          <span className="font-[family-name:var(--font-mono)]">
+            {formatBytes(quota.usage)} / {formatBytes(quota.quota)}
+          </span>
+        </div>
+        <div className="h-1 rounded-full bg-border/60 overflow-hidden">
+          <div className={`h-full rounded-full ${tone} transition-all`} style={{ width: `${Math.max(2, pct)}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * RecoveryScreen — Shown when permanently failed items exist in the queue.
@@ -80,6 +128,8 @@ export function RecoveryScreen({ matchId }: { matchId: string }) {
 
           {expanded && (
             <div className="mt-3 space-y-2">
+              {/* v2 §16.4 — storage quota meter inside the queue inspector */}
+              <QuotaMeter />
               {failedItems.map((item) => (
                 <FailedItemRow
                   key={item.id}

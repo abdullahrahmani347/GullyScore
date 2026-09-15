@@ -18,6 +18,8 @@ interface ScoreButtonsProps {
   redoAvailable?: boolean;
   /** v2 §12.5 — overflow menu (penalty + more) */
   onMore: () => void;
+  /** v2 §16.2 — another tab holds the scorer lock → everything read-only */
+  locked?: boolean;
 }
 
 const scoreButtons = [
@@ -38,11 +40,12 @@ export function ScoreButtons({
   onRedo,
   redoAvailable,
   onMore,
+  locked,
 }: ScoreButtonsProps) {
   const isSubmitting = useMatchStore((s) => s.isSubmitting);
   const currentState = useMatchStore((s) => s.currentState);
   const currentInnings = useMatchStore((s) => s.currentInnings);
-  const disabled = isSubmitting || currentState === 'PROCESSING';
+  const disabled = isSubmitting || currentState === 'PROCESSING' || !!locked;
 
   // v2 §14.10 — count badge: live events an undo could remove
   const undoCount = undoableBallCount(currentInnings?.balls ?? []);

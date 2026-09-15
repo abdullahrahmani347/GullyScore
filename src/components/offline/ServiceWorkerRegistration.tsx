@@ -15,6 +15,12 @@ import { getSyncEngine } from '@/lib/offline/sync-engine';
  * install and `clients.claim()` on activate, so new versions are picked
  * up silently on the next navigation without interrupting the user
  * (which was especially disruptive on mobile during live scoring).
+ *
+ * v2 §16.1 — Background Sync: the SW wakes a hidden client via the
+ * { type: 'RUN_SYNC' } message (tag 'gullyscore-queue'). Dexie/the sync
+ * engine cannot run inside the SW context (device id from localStorage,
+ * page-side IndexedDB queue), so the SW only nudges; this component runs
+ * the actual syncAll(). The foreground 'online' path remains primary.
  */
 export function ServiceWorkerRegistration() {
   useEffect(() => {
@@ -32,10 +38,24 @@ export function ServiceWorkerRegistration() {
       }
     };
 
+    // v2 §16.1 — Background Sync wake-up from the service worker
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'RUN_SYNC') {
+        console.log('[GullyScore] SW background-sync wake-up — running syncAll()');
+        try {
+          void getSyncEngine().syncAll();
+        } catch {
+          // ignore
+        }
+      }
+    };
+
     window.addEventListener('online', handleOnline);
+    navigator.serviceWorker?.addEventListener('message', handleSWMessage);
 
     return () => {
       window.removeEventListener('online', handleOnline);
+      navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
     };
   }, []);
 
