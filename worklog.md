@@ -925,3 +925,20 @@ Stage Summary:
 - SSE event log is the new source of truth for replay; reactions/heartbeats are provably ephemeral (no rows, no ids)
 - Two real bugs caught by driving the E2E in a browser (BigInt SQLite autoincrement quirk; embed render crash) — both fixed at the root
 - 250 unit tests + 159 E2E assertions across §12–§15 all green; sharp retained in the standalone build for the OG route
+
+---
+Task ID: 9
+Agent: main
+Task: Push all code with new GitHub token + restore preview
+
+Work Log:
+- Pushed 7 local commits (5d99f9e..b202ff2) to origin/main with user-provided token; push verified.
+- Found /live returning 500 in production: server held a stale SQLite file handle (DB file replaced after server start; both on-disk copies had the new columns).
+- Restarted production server; discovered sandbox reaps tool-call children, so used `setsid --fork` daemonization to make next-server persist.
+- Verified full chain: app :3000 -> Caddy :81 -> https://preview-chat-8ad6f7e9-f541-4d33-b906-8e31a003d637.space-z.ai (200, GullyScore title).
+- /live 200, / 200, /embed/match/[id] 404 as expected for unknown id.
+
+Stage Summary:
+- origin/main = b202ff2 (v2 §12–§15 + both bug fixes + worklogs), working tree clean.
+- Preview live at preview-chat-8ad6f7e9-f541-4d33-b906-8e31a003d637.space-z.ai.
+- Server start command for future reference: `cd /home/z/my-project && setsid --fork bash -c 'exec bun run start' > server.log 2>&1 < /dev/null &`
