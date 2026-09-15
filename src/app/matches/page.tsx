@@ -2,8 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { AlertTriangle, RefreshCw, Trash2, Ban } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Trash2, Ban, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -121,8 +122,20 @@ export default function MatchesPage() {
     <PageWrapper>
       {/* Header */}
       <div className="px-4 pt-6 pb-2">
-        <h1 className="text-2xl font-bold text-t1">Matches</h1>
-        <p className="text-sm text-t2 mt-0.5">All your cricket matches</p>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-t1">Matches</h1>
+            <p className="text-sm text-t2 mt-0.5">All your cricket matches</p>
+          </div>
+          <Link
+            href="/matches/new"
+            className="flex-shrink-0 inline-flex items-center gap-1 h-9 px-3 rounded-xl bg-accent text-bg-app hover:bg-accent/90 font-semibold text-sm transition-colors"
+          >
+            <Plus size={16} />
+            <span className="hidden xs:inline">New Match</span>
+            <span className="xs:hidden">New</span>
+          </Link>
+        </div>
       </div>
 
       {/* Filter Tabs */}

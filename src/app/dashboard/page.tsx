@@ -2,7 +2,7 @@
 
 import useSWR from 'swr';
 import Link from 'next/link';
-import { Plus, AlertTriangle, RefreshCw, Sun, Moon, Smartphone } from 'lucide-react';
+import { Plus, AlertTriangle, RefreshCw, Sun, Moon, Smartphone, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageWrapper } from '@/components/layout/PageWrapper';
@@ -132,7 +132,13 @@ export default function DashboardPage() {
 
       {/* Live Match Banner */}
       <div className="mt-6">
-        <h2 className="px-4 text-sm font-semibold text-t2 uppercase tracking-wider mb-3">Live Matches</h2>
+        <div className="flex items-center justify-between px-4 mb-3">
+          <h2 className="text-sm font-semibold text-t2 uppercase tracking-wider">Live Matches</h2>
+          <Link href="/live" className="text-xs text-accent font-medium inline-flex items-center gap-1">
+            <Radio size={12} />
+            Live Hub
+          </Link>
+        </div>
         {isLoading ? (
           <div className="px-4">
             <Skeleton className="w-full h-40 rounded-2xl bg-bg-card" />

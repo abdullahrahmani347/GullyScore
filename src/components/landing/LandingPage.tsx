@@ -852,9 +852,11 @@ function CTASection() {
               <span className="text-border">/</span>
               <span>made for the matches nobody else scores</span>
             </div>
-            <div className="flex items-center gap-5">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
               <Link href="/dashboard" className="hover:text-accent transition-colors">Dashboard</Link>
+              <Link href="/live" className="hover:text-accent transition-colors">Live</Link>
               <Link href="/matches" className="hover:text-accent transition-colors">Matches</Link>
+              <Link href="/players" className="hover:text-accent transition-colors">Players</Link>
               <Link href="/teams" className="hover:text-accent transition-colors">Teams</Link>
               <Link href="/tournaments" className="hover:text-accent transition-colors">Leagues</Link>
             </div>

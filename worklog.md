@@ -942,3 +942,20 @@ Stage Summary:
 - origin/main = b202ff2 (v2 §12–§15 + both bug fixes + worklogs), working tree clean.
 - Preview live at preview-chat-8ad6f7e9-f541-4d33-b906-8e31a003d637.space-z.ai.
 - Server start command for future reference: `cd /home/z/my-project && setsid --fork bash -c 'exec bun run start' > server.log 2>&1 < /dev/null &`
+
+---
+Task ID: 10
+Agent: main
+Task: Surface every destination in the app nav (Live hub, Players, CTAs)
+
+Work Log:
+- BottomNav: expanded 4 → 6 tabs (Home, Live, Matches, Players, Teams, Leagues); Live tab gets pulsing wicket-red dot fed by new useLiveCount() hook (polls /api/live every 30s, silent on failure); flex-1 min-w-0 layout keeps 320px screens safe.
+- SidebarNav: same 6 entries + live dot, icons-tinted active states unchanged.
+- Dashboard: added "Live Hub" link in the Live Matches section header.
+- Landing footer: added Live + Players links.
+- Matches page: added missing "New Match" CTA in header (was 0 links to /matches/new).
+- Created missing /players index page (only /players/[id] existed before): search, A-Z/runs/wickets sort chips, team-tinted jersey avatars, career runs/wickets, links to detail page.
+- Created GET /api/players: device-scoped non-guest directory with groupBy career aggregates (no N+1).
+
+Stage Summary:
+- All 6 top-level destinations reachable from home nav; /players + /api/players new; 250/250 tests; all routes 200 locally and via preview.
