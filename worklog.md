@@ -1004,3 +1004,20 @@ Work Log (§17):
 
 Stage Summary:
 - 261/261 tests (11 new: standings chain incl. h2h sign-fix regression, bracket seeding/byes/champion); touched-file tsc clean; prod rebuilt+restarted; all routes + new APIs 200 (smoke: HYBRID tournament seeded, bracket auto-seeded F, ICS/CSV export live).
+
+---
+Task ID: 13
+Agent: main
+Task: Push backlog with fresh token + production health restore + §16.5 buildId gap fix + demo reseed
+
+Work Log:
+- Push: 11 local commits (nav audit af5ff62/d63f76b + §16/§17 b183c71) pushed to origin/main with user-provided token; credential file deleted immediately after.
+- DB: sandbox restart had restored a stale DB snapshot (missing §17 additive columns → /live 500 P2022 scheduledAt) AND wiped all data (0 teams/matches/tournaments). prisma db push reported "already in sync" against the NEW inode while the running server still held the OLD inode — the documented stale-handle failure. Fixed via scripts/start-server.sh restart; all 9 main routes 200.
+- §16.5 gap fix: /api/buildinfo never exposed a real build id (env-baked marker was unset → SW cache stamp fell back to constant "unset", so rebuilds could not invalidate caches). Route now reads .next/BUILD_ID (cwd-aware for standalone) and serves `buildId: "VINQzrAcpABJ6LK49sC-o"`. Rebuilt + restarted.
+- Demo reseed: new scripts/seed-demo-v17.ts replays a HYBRID tournament through the REAL API paths (teams → tournament PUT squadLockDate/guests → ball-by-ball with client-side rotation simulation → complete → schedule PATCH). Lesson learned: clientEventId must be unique across innings of the same match (server 422 VALIDATION) — ids now carry an innings tag.
+- E2E: 36/36 assertions green — buildinfo/SW stamps, 4 completed matches with correct winners, points chain (2-way 4-pt tie broken by NRR), bracket auto-seeds SF 1v4/2v3 with unseeded Final, all 5 leaderboards + guest flag, ICS 6 VEVENTs + CSV, public hub without device scope, tournament + report pages 200.
+- 261/261 unit tests; production rebuilt from current tree.
+
+Stage Summary:
+- origin/main = current HEAD; no unpushed work.
+- Production serves demo dataset: 4-team HYBRID tournament (played league stage, scheduled fixtures w/ venue+umpires, bracket ready).

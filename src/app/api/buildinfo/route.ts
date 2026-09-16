@@ -1,6 +1,31 @@
 import { NextResponse } from "next/server";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { ensureDbSchema } from "@/lib/db";
 import { getFeatures } from "@/lib/features";
+
+/**
+ * v2 §16.5 — real Next.js build id for the service-worker cache stamp.
+ * The SW fetches /api/buildinfo at activate time and stamps cache names
+ * with `buildId`, so a rebuild invalidates every app-shell cache. Reads
+ * .next/BUILD_ID from both the project root and the standalone cwd
+ * (standalone servers run with cwd = .next/standalone); null when absent.
+ */
+function readNextBuildId(): string | null {
+  const candidates = [
+    path.join(process.cwd(), ".next", "BUILD_ID"),
+    path.join(process.cwd(), "..", "..", ".next", "BUILD_ID"),
+  ];
+  for (const file of candidates) {
+    try {
+      const id = readFileSync(file, "utf8").trim();
+      if (id) return id;
+    } catch {
+      // not found — try the next candidate
+    }
+  }
+  return null;
+}
 
 /**
  * GULLYSCORE DIAGNOSTIC ENDPOINT — /api/buildinfo
@@ -61,6 +86,9 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    // v2 §16.5 — SW cache stamp: prefer the real Next BUILD_ID, fall back to
+    // the env-baked sha/timestamp (legacy build.sh path).
+    buildId: readNextBuildId() ?? process.env.GIT_SHA ?? undefined,
     marker: process.env.GULLYSCORE_BUILD_MARKER ?? "dev-no-marker",
     builtAt: process.env.BUILD_TIMESTAMP ?? "unset",
     gitSha: process.env.GIT_SHA ?? "unset",
